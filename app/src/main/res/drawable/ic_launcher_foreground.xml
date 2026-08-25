@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Shadow for the Cashflow Arrows -->
+    <path
+        android:pathData="M 42 60 C 42 48, 50 40, 62 40 L 62 46 L 72 36 L 62 26 L 62 32 C 46 32, 34 44, 34 60 Z"
+        android:fillColor="#10000000" />
+    <path
+        android:pathData="M 66 52 C 66 64, 58 72, 46 72 L 46 66 L 36 76 L 46 86 L 46 80 C 62 80, 74 68, 74 52 Z"
+        android:fillColor="#10000000" />
+
+    <!-- Up-Right Arrow (Purple/Pink Gradient) -->
+    <path
+        android:pathData="M 42 58 C 42 46, 50 38, 62 38 L 62 44 L 72 34 L 62 24 L 62 30 C 46 30, 34 42, 34 58 Z"
+        android:fillType="nonZero">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="34"
+                android:startY="24"
+                android:endX="72"
+                android:endY="58"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#7C4DFF" />
+                <item android:offset="1.0" android:color="#FF4081" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Down-Left Arrow (Purple/Pink Gradient) -->
+    <path
+        android:pathData="M 66 50 C 66 62, 58 70, 46 70 L 46 64 L 36 74 L 46 84 L 46 78 C 62 78, 74 66, 74 50 Z"
+        android:fillType="nonZero">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="36"
+                android:startY="50"
+                android:endX="74"
+                android:endY="84"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#7C4DFF" />
+                <item android:offset="1.0" android:color="#FF4081" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Document Note Shadow (Glassmorphic) -->
+    <path
+        android:pathData="M 63 60 L 74 60 L 82 68 L 82 79 C 82 81.2, 80.2 83, 78 83 L 63 83 C 60.8 83, 59 81.2, 59 79 L 59 64 C 59 61.8, 60.8 60, 63 60 Z"
+        android:fillColor="#15000000" />
+
+    <!-- Document Note Base (Frosted Glass Look) -->
+    <path
+        android:pathData="M 62 58 L 74 58 L 82 66 L 82 78 C 82 80.2, 80.2 82, 78 82 L 62 82 C 59.8 82, 58 80.2, 58 78 L 58 62 C 58 59.8, 59.8 58, 62 58 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:fillColor="#CCFFFFFF" />
+
+    <!-- Document Note Folded Dog-Ear -->
+    <path
+        android:pathData="M 74 58 L 74 66 L 82 66 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:fillColor="#E0FFFFFF" />
+
+    <!-- "Rp" Text styled with deep theme primary color -->
+    <!-- "R" path -->
+    <path
+        android:pathData="M 64 75 L 64 67 L 67 67 C 68.2 67, 69.2 67.6, 69.2 68.7 C 69.2 69.8, 68.2 70.4, 67 70.4 L 64 70.4 M 66.5 70.4 L 68.8 75"
+        android:strokeColor="#5B3E96"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- "p" path -->
+    <path
+        android:pathData="M 71 78 L 71 71 L 73.2 71 C 74.4 71, 75.2 71.6, 75.2 72.7 C 75.2 73.8, 74.4 74.4, 73.2 74.4 L 71 74.4"
+        android:strokeColor="#5B3E96"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

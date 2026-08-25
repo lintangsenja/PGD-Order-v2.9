@@ -1,0 +1,6 @@
+{
+  "name": "PGD Order",
+  "description": "Aplikasi manajemen keuangan berbasis Envelope Budgeting dengan autoplotting pendapatan untuk PGD Order.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
