@@ -29,8 +29,17 @@ data class TransaksiOrderMasuk(
     val jumlahPlastikPengemasan: Int = 0,
     
     @ColumnInfo(name = "status")
-    val status: String // "Lunas" or "Belum Lunas"
+    val status: String, // "Lunas" or "Belum Lunas"
+    
+    @ColumnInfo(name = "kategori", defaultValue = "Umum")
+    val kategori: String = "Umum" // "Nota", "Umum", etc.
 ) {
+    // Helper to identify if an order is specific to Nota
+    val isNota: Boolean
+        get() = kategori.equals("nota", ignoreCase = true) ||
+                (kategori.isBlank() || kategori.equals("umum", ignoreCase = true)) &&
+                namaPesanan.contains("nota", ignoreCase = true)
+
     // Helper calculations inside the model to keep code clean and modular
     val totalPendapatan: Double
         get() = qtyOrder.toDouble() * hargaSatuan

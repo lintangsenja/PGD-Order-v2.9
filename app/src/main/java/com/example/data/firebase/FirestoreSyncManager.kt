@@ -164,6 +164,7 @@ class FirestoreSyncManager(
                                     val hargaSatuan = doc.getDouble("hargaSatuan") ?: 0.0
                                     val jumlahPlastik = (doc.getLong("jumlahPlastikPengemasan") ?: 0L).toInt()
                                     val status = doc.getString("status") ?: "Belum Lunas"
+                                    val kategori = doc.getString("kategori") ?: doc.getString("type") ?: "Umum"
 
                                     if (idOrder > 0 && namaPesanan.isNotBlank()) {
                                         val order = TransaksiOrderMasuk(
@@ -174,7 +175,8 @@ class FirestoreSyncManager(
                                             satuan = satuan,
                                             hargaSatuan = hargaSatuan,
                                             jumlahPlastikPengemasan = jumlahPlastik,
-                                            status = status
+                                            status = status,
+                                            kategori = kategori
                                         )
                                         dao.insertOrder(order)
                                     }
@@ -375,6 +377,8 @@ class FirestoreSyncManager(
                 "hargaSatuan" to order.hargaSatuan,
                 "jumlahPlastikPengemasan" to order.jumlahPlastikPengemasan,
                 "status" to order.status,
+                "kategori" to order.kategori,
+                "type" to if (order.isNota) "nota" else "umum",
                 "totalPendapatan" to order.totalPendapatan,
                 "updatedAt" to System.currentTimeMillis()
             )

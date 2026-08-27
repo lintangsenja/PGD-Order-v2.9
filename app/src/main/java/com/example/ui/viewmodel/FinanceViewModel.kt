@@ -78,6 +78,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     val allAccounts: StateFlow<List<MasterAkunSaldo>>
     val allOrders: StateFlow<List<TransaksiOrderMasuk>>
+    val notaOrders: StateFlow<List<TransaksiOrderMasuk>>
     val allMutations: StateFlow<List<MutasiManualKeluarMasuk>>
     val allPelanggan: StateFlow<List<MasterPelanggan>>
     val allSatuanHarga: StateFlow<List<MasterSatuanHarga>>
@@ -314,6 +315,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         allOrders = repository.allOrders
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+        notaOrders = repository.allOrders
+            .map { list -> list.filter { it.isNota } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
         allMutations = repository.allMutations
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -540,7 +545,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         satuan: String,
         harga: Double,
         plastik: Int,
-        status: String
+        status: String,
+        kategori: String = "Umum"
     ) {
         viewModelScope.launch {
             val order = TransaksiOrderMasuk(
@@ -550,7 +556,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 satuan = satuan,
                 hargaSatuan = harga,
                 jumlahPlastikPengemasan = plastik,
-                status = status
+                status = status,
+                kategori = kategori
             )
             repository.insertOrder(order)
         }
