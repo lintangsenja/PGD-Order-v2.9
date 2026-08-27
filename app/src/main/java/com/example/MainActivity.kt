@@ -7780,41 +7780,29 @@ fun LaporanTab(viewModel: FinanceViewModel) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ScrollableTabRow(
-            selectedTabIndex = when (selectedSubTab) {
-                0 -> 0
-                4 -> 1
-                1 -> 2
-                2 -> 3
-                3 -> 4
-                else -> 0
-            },
-            containerColor = Color.Transparent,
-            divider = {},
-            indicator = {},
-            edgePadding = 6.dp,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 6.dp)
                 .background(colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                .padding(3.dp)
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val tabs = listOf(
                 Triple("Laporan", Icons.Default.Assessment, 0),
-                Triple("Analisis Pos", Icons.Default.BarChart, 4),
-                Triple("Status", Icons.Default.Payment, 1),
-                Triple("Ledger", Icons.Default.AccountBalanceWallet, 2),
-                Triple("Mutasi Kas", Icons.Default.SwapHoriz, 3)
+                Triple("Analisis Pos", Icons.Default.BarChart, 1),
+                Triple("Ledger", Icons.Default.AccountBalanceWallet, 2)
             )
             tabs.forEach { (title, icon, index) ->
                 val isSelected = selectedSubTab == index
                 Box(
                     modifier = Modifier
+                        .weight(1f)
                         .height(34.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (isSelected) colorScheme.primary else Color.Transparent)
                         .clickable { selectedSubTab = index }
-                        .padding(horizontal = 10.dp),
+                        .padding(horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
@@ -7823,15 +7811,17 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     ) {
                         Icon(
                             imageVector = icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(15.dp),
-                            tint = if (isSelected) colorScheme.onPrimary else colorScheme.onSurfaceVariant
+                            contentDescription = title,
+                            tint = if (isSelected) colorScheme.onPrimary else colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = title,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) colorScheme.onPrimary else colorScheme.onSurfaceVariant
+                            color = if (isSelected) colorScheme.onPrimary else colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -8387,470 +8377,6 @@ fun LaporanTab(viewModel: FinanceViewModel) {
 }
 
             1 -> {
-                var statusFilter by remember { mutableStateOf("Semua") }
-                val filteredList = remember(allOrdersList, statusFilter) {
-                    when (statusFilter) {
-                        "Lunas" -> allOrdersList.filter { it.status == "Lunas" }
-                        "Belum Lunas" -> allOrdersList.filter { it.status == "Belum Lunas" }
-                        else -> allOrdersList
-                    }
-                }
-                
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        Text(
-                            text = "Status Transaksi",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Pantau status pembayaran setiap order masuk dan perbarui pembayaran secara real-time.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                        )
-                    }
-
-                    item {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            listOf("Semua", "Lunas", "Belum Lunas").forEach { statusLabel ->
-                                ElevatedFilterChip(
-                                    selected = statusFilter == statusLabel,
-                                    onClick = { statusFilter = statusLabel },
-                                    label = { Text(statusLabel) },
-                                    leadingIcon = if (statusFilter == statusLabel) {
-                                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                    } else null
-                                )
-                            }
-                        }
-                    }
-
-                    if (filteredList.isEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceVariant.copy(alpha = 0.2f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Tidak ada transaksi dengan status ini.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        items(filteredList) { order ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                                border = BorderStroke(1.dp, colorScheme.outlineVariant)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Text(
-                                                text = order.namaPesanan,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "Tanggal: ${order.tanggalOrder}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = colorScheme.onSurfaceVariant
-                                            )
-                                        }
-
-                                        val isLunas = order.status == "Lunas"
-                                        val badgeColor = if (isLunas) MintAurora else PinkAurora
-                                        val badgeTextColor = if (isLunas) HijauGelap else MagentaLembut
-                                        Surface(
-                                            color = badgeColor,
-                                            shape = RoundedCornerShape(100.dp)
-                                        ) {
-                                            Text(
-                                                text = if (isLunas) "SUDAH LUNAS" else "PENDING BAYAR",
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = badgeTextColor
-                                            )
-                                        }
-                                    }
-
-                                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.7f))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column {
-                                            Text("Rincian Paket", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
-                                            Text("${order.qtyOrder} ${order.satuan}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                        }
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("Harga Satuan", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
-                                            Text(formatRupiah(order.hargaSatuan), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                        }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text("Total Bayar", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
-                                            Text(formatRupiah(order.totalPendapatan), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = colorScheme.primary)
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        IconButton(
-                                            onClick = { viewModel.deleteOrder(order) }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Hapus Transaksi",
-                                                tint = colorScheme.error.copy(alpha = 0.8f)
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.width(8.dp))
-
-                                        Button(
-                                            onClick = {
-                                                val nextStatus = if (order.status == "Lunas") "Belum Lunas" else "Lunas"
-                                                viewModel.updateOrder(order.copy(status = nextStatus))
-                                            },
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (order.status == "Lunas") colorScheme.surfaceVariant else colorScheme.primary,
-                                                contentColor = if (order.status == "Lunas") colorScheme.onSurfaceVariant else colorScheme.onPrimary
-                                            )
-                                        ) {
-                                            Icon(
-                                                imageVector = if (order.status == "Lunas") Icons.Default.Close else Icons.Default.Check,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = if (order.status == "Lunas") "Ubah ke Belum Lunas" else "Tandai Lunas",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        Spacer(modifier = Modifier.height(48.dp))
-                    }
-                }
-            }
-
-            2 -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    item {
-                        Text(
-                            text = "Ledger Saldo Pos",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Pantau pembagian otomatis (plotting) ke amplop modal dasar dan sisa laba berdasarkan transaksi lunas, serta mutasi kas penyesuaian secara real-time.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                        )
-                    }
-
-                    item {
-                        LedgerSaldoPosCard(
-                            summary = summary,
-                            onAccountClick = { selectedLedgerAccount = it }
-                        )
-                    }
-
-                    item {
-                        Spacer(modifier = Modifier.height(48.dp))
-                    }
-                }
-            }
-
-            3 -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    item {
-                        Text(
-                            text = "Laporan Mutasi Kas",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Rekapitulasi detail seluruh transaksi penyesuaian kas manual, penarikan/pembayaran, dan transfer saldo antar dompet.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
-                        )
-                    }
-
-                    // Header Tabel
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, colorScheme.outlineVariant)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 12.dp, horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "WAKTU & TIPE",
-                                    modifier = Modifier.weight(1.5f),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "DOMPET ASAL/TUJUAN",
-                                    modifier = Modifier.weight(2.0f),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "NOMINAL & AUDIT",
-                                    modifier = Modifier.weight(2.0f),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.End
-                                )
-                            }
-                        }
-                    }
-
-                    if (mutations.isEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceVariant.copy(alpha = 0.2f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Tidak ada riwayat mutasi kas dalam rentang tanggal ini.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        items(mutations) { mut ->
-                            val isMasuk = mut.jenisMutasi == "Uang Masuk"
-                            val isTransfer = mut.jenisMutasi == "Pindah Saldo"
-                            
-                            val sourceAccountName = accountMap[mut.idAkun]?.namaAkun?.replace("Dompet ", "") ?: "Kas"
-                            val targetAccountName = if (isTransfer) {
-                                accountMap[mut.idAkunTujuan]?.namaAkun?.replace("Dompet ", "") ?: "Kas"
-                            } else null
-
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                                border = BorderStroke(1.dp, colorScheme.outlineVariant)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // Column 1: Date, Time & Type Badge
-                                        Column(modifier = Modifier.weight(1.5f)) {
-                                            Text(
-                                                text = mut.tanggalMutasi,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = mut.waktuMutasi,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(
-                                                        color = when {
-                                                            isMasuk -> Color(0xFFE8F5E9)
-                                                            isTransfer -> Color(0xFFE3F2FD)
-                                                            else -> Color(0xFFFFEBEE)
-                                                        },
-                                                        shape = RoundedCornerShape(100.dp)
-                                                    )
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = when {
-                                                        isMasuk -> "MASUK"
-                                                        isTransfer -> "TRANSFER"
-                                                        else -> "KELUAR"
-                                                    },
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    color = when {
-                                                        isMasuk -> Color(0xFF2E7D32)
-                                                        isTransfer -> Color(0xFF1565C0)
-                                                        else -> Color(0xFFC62828)
-                                                    }
-                                                )
-                                            }
-                                        }
-
-                                        // Column 2: Wallets
-                                        Column(modifier = Modifier.weight(2.0f)) {
-                                            if (isTransfer) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        Icons.Default.RemoveCircle, 
-                                                        contentDescription = null, 
-                                                        tint = Color(0xFFC62828), 
-                                                        modifier = Modifier.size(12.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(
-                                                        text = sourceAccountName,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        Icons.Default.AddCircle, 
-                                                        contentDescription = null, 
-                                                        tint = Color(0xFF2E7D32), 
-                                                        modifier = Modifier.size(12.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(
-                                                        text = targetAccountName ?: "",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                            } else {
-                                                Text(
-                                                    text = sourceAccountName,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = colorScheme.onSurface
-                                                )
-                                                Text(
-                                                    text = if (isMasuk) "Sebagai Dompet Penerima" else "Sebagai Dompet Pengirim",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                )
-                                            }
-                                        }
-
-                                        // Column 3: Nominal & Audit note
-                                        Column(
-                                            modifier = Modifier.weight(2.0f),
-                                            horizontalAlignment = Alignment.End
-                                        ) {
-                                            Text(
-                                                text = when {
-                                                    isMasuk -> "+" + formatRupiah(mut.nominal)
-                                                    isTransfer -> formatRupiah(mut.nominal)
-                                                    else -> "-" + formatRupiah(mut.nominal)
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = when {
-                                                    isMasuk -> Color(0xFF2E7D32)
-                                                    isTransfer -> colorScheme.primary
-                                                    else -> Color(0xFFC62828)
-                                                }
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = mut.keterangan,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = colorScheme.onSurfaceVariant,
-                                                textAlign = TextAlign.End,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        Spacer(modifier = Modifier.height(48.dp))
-                    }
-                }
-            }
-
-            4 -> {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -8881,6 +8407,40 @@ fun LaporanTab(viewModel: FinanceViewModel) {
 
                     item {
                         AllocationBarChart(summary.rows)
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(48.dp))
+                    }
+                }
+            }
+            2 -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        Text(
+                            text = "Ledger Saldo Pos",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colorScheme.onBackground
+                        )
+                        Text(
+                            text = "Pantau pembagian otomatis (plotting) ke amplop modal dasar dan sisa laba berdasarkan transaksi lunas, serta mutasi kas penyesuaian secara real-time.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                        )
+                    }
+
+                    item {
+                        LedgerSaldoPosCard(
+                            summary = summary,
+                            onAccountClick = { selectedLedgerAccount = it }
+                        )
                     }
 
                     item {
@@ -10396,32 +9956,463 @@ fun OrderNotaScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.Edit,
-                                         xœì=Ùr9’ïıhm›jËÔeùĞ»‡¤([£Ã‘nÇDl„$!±šÅ*N¶5İØoÙOÛ/Y$€*¢.Å¢,÷
-6EV%®Df"O„ĞØ÷"âEG$Î"r|½B^ìº[ß!‹9^D_<Ç	ì§dNÚcßõƒÁ˜}ö½ËÀ™ãà¶G;ÄG»æşÄ¹vH ˆíĞù7ií=kO›Æ°ÌŸìùn<÷ĞïVÃ’ÏQËêhtJõ'N„.Iˆ=ì¡?Âè?~øĞ/ïæm0!ÁÉäË†İªA»¦ş87SØ ãôv×w'öĞÂèÖ%…nşM€ÓÛväD.Ì±-Acc‰FV˜ï>´š›ùn„§(p¼±C÷q!öÓÅnŒBg¾ Ÿc/ŠghNæŒp;(ÂŞ£I¼pvmÖnÌÈŸÜŞá¾ĞŸ·-ì.¦˜¾¹Ó~qpm·úæO1zÒì)ØónE¾g¾ó¾×sñŒNÓXdÏ¶ »V<<Ç‚bÀÀ)ˆ+ ÿŠnY÷õŞ(‘rßààÿ=¦XQÆ^à(®;…ßâ¹‹§—.#gfÂ-6-¶–‘.¦kÃhúÆ–Á"Aà[Jbmv ôóQ?Qıkù/_¾+ız{½!˜bêb’ÔÃÁ¤ôI'"sÅêÂ{ê£X&\;®{?¿w&Ñ´µ©¦xlBú6tuD®qìFa{Lÿè±_Zã„¦õÄ6²ÿ[;Ÿ÷ûıãÎ¦¦‡‘gŒ¾ØeQàÏHk—
-.[¬şÓ£Îñs¬pŠ@ç¯üØ›:Ä€l _¶öv”¢‡¯üOzšW¶Ø<™P:ÖÚe¢˜½|$AäŒ±ÛqoN˜ä˜~n÷è?$øU<ãŞêáMıÀù7ì‘Û	ìİæò¯v¸Àc2éŞ¶v÷´ò¢Éa?¡HÑ‚Â¶@™v»ãØ¥'|K!U'’òrÛŸuö^îonU‹¸ûlÈúão%±Ú	7‘ «—®,]ú¡…Œb&4S~ÏÍ¡6#Øgz¿»·ÿì¥µ5{ªŞZHc*z©0ùæòµèÎqHHÏq±ƒv6Ûhà„@DıÈŸãÈ	™h)6ÊóçGÑŒ 0=¡çá —ú¡”¹é²¸òO»ÏúM­ü]ñ¹Ã	?DWÒ6m£S¾ğ=â¡N²æ­®R)ßqBØ¶ûÉUìå©¼ÛóRY
-ãàš’é¸iæNG.íéWL–r€Ü}äùµÓ—|Ä‚v¦ÓO~lMø×}éi5‹Ñ±NÆWdÅ/,Yñ1N#)£jz6˜œ4é` “ì’è!T;FÒô~a¼zöc4'ÜVòÖcõœÍ«DüÆ‘ä%“ˆWZ˜«ìUB	7O˜C‘-lÃ°Ôø¬M×œ¶p\BàÅz7¬­5»ÂwıÏæ;WB|¬&ßáñì& &Ú:§x÷: ”%Ï‚ö®©Ô_ÂhwwvÌşL	é_NÚÉÆB@¿xº–ãXÿXP¼"Ó¢.Í6}\<"î½8K1w¯ÿüh¯i›…‰âGûˆùF&Ø‰â ETÆº†CCqìZ ¤4‡ùô3)Æn;Ùb*ƒâ›o¼‡~£W4K¨bäLğŒ>q{˜şjzGiú~RF¼|oÀåS!Qê™º~½éõáçD9ÂØ@ømÊO–ÜŞ”´¼åü°òØ!®æî#·Ø!f”ôáğÍb0Ì®ïı
- zS˜"(ö³€è7tÓ¾˜ÃcdˆÁáÚa¸"2ˆ¨uµØØÜØ´X¶½Ÿjí^o¶#FC|ÓÚp¼E}ğü˜.ø46÷ÚŒÜ|zãyË¤)¸Ûf¿i%OoÙÕñTú³}ÏG$°è.½Aã0òçlÛùİÑB[!.±ÆY- PNê’3Š|LÄ¤AmPX¢,n ©e8àô Ş1J³I<`´Âš0Ú@¨¨‰ğ	²/°bÏ
-ã‹Ø^ d…òeè~™BÜH†ûâ³úë™u%ú/gezîÿWÅıÕğŞçÍD¶KŒAÀ¥xe$³ÙKÕ—Kºãúà‚Ş.EiÔúËfS‚1CkÓËê7#¥pİÄ=ÈÈF-!°Ÿ(µ"—ãhUiB†³²4ñ€1D_·±GØĞd„{.ß`z­ú7€ÍEh+ãôDæ¡v4{Àk„¯'?°*£–q×	£À™5p¼³V>ÚgÜj1ü‡£­ƒp¿YÖ;`¯ÄŞ¸	¬me¼>_‚¼3ÜfÓxÀl„µ1­z¿Öv›:İGG8Â™è—Ò÷ü£ü£î«”Ş´n"(ÙëŠÏ’!Tˆg¡“9FMé‰lJÖ£&2u 1Óã™;¬>äfEvÄ»©«¶¯¯¤¬3•p¤õOÚœŸ?9:Z¿ZLÁ”§»Ã)ÿ.6‡rg{âMp0ô'øVéöU9Ê½lL§Øq¥Q3jxA„”I‘b”“øŸ(Ó#—ô6:àáè‹ÛM=·6 õ
-Ğ§b]6.éD¦	öo4h÷ÿÙ4pçK1fÑ…ŸÑ…uÓ˜\$`]ZS(¬OsÄRÌœ¼ˆEræd|ú.e³SÊ;ØQIº€hSzˆ†şÌG]L<EOxğô‚30ÃtÑ»BàT‡ºñ,^?±ƒ5lÒ]‘1¡G÷NhÜŸóLş#ºE0Ê>hä¤Ö€C ^AwaÅórQËŞ/7r€ 8É‰±hË‰6Ñ/‡hÇƒş•Ihâ‘\ÂC¤íÜzkÔ‚ÁşŒvĞ£GË®¾çGßVZ€VŒ¸¾öƒ9ø°[iÛ°Jv£5Ø“õURgß	“]»FŠ.Âƒ.J¡¦.ê®ˆT!GÀ*ZÖ²„«)Yß¡nL–8´CérÉhgıšZ>è‡³¡ƒğõŒ‹ â jBÀ¨ ÄÿààA’Z.vW2Qi.–†$#YŞZƒŒä<ÈDüÉ<KòÇ¼uµX¿±-Ë‡ßbsÍ´.p%¤Ü¸+ªU<w÷‡d±±­‡d¥ W Y¥?Cµ ÃŸÒ¾î!Õ’%‘»¡Xl1>„¬Çš¥ƒğU%×ADw)òßB üŸAV½×É%ì¢¸7ø6™EÈ:Z³y VŠø…fFg¹;™;.]‹ŞÔY˜¯|H\2¦ï·Ïb[PÙ)^NM+x?œõï1]N»]Ş‰Å(3Æ`ÁbÆ¶ì¶Ü=%ãY=«O”·iÃdqCb ôN‘ğû†°ğÃW@Ã.qã9ºdAW«!ã÷Ø¸„h&Üzctãú#*9‡Ÿœh<½2Á:’.Ù¦°úJAâ6$”›Cj<E:<ÇsX
-B¨oá=I?xGÀğÕ|1Çp y)Ö¿f+6 $u´#´d¿(Â³6`”–”Hò“ÉÉ$ôõAl÷7›×ñìä×>ºêwÎOÎûèòìípxrñuéw§Goß_ ^çê¨ŒÆ_Yh/$%CFª_E€¹šm«Á
-#OÙ f01J%¼Ù›Å¢lx™ì*F#‹* É)-Ì¦X¨-ÀÚ§Ë1ĞÀGÆ%JB#‡Ç&°6Ñ6‚t_š¹Îª¡Ãí`»Õ ³!Rv`çÕ`‹Q*EĞJØ”sEòœWâø´#_@ßD?1,ÓBà©JÊD& –É }Òƒ’…´0Äc_qäù)s–õÓ8…ûÛ¬Æ›IÈÚ+–o³À úî¼ä]=¥:g©Â^É[ùXÚ•Çù~,­ÓãdŞ3Óx¼–vğ'Ägx„‹]B8ŸH£«ÅC”	ª29(Ä™Ÿı|€ÉÁLÔ¡ßj€‰:½¿ÉÌ İK-éCŞo?ï¥VÀ@í©üu“ğbw»MçŠ`÷ÉĞ™%jÔ4€¶ºĞş¼ixk©¸Yó*^8xÚ’9¶…în‹Pô?G^İa³ShÙŞ¤¤åÈùèPÆŞ*Õ“dBG¼@ğ‚»0%p­x{m†CJ?¨$½qäÏ$)3¡ R*7n¡~ÏàHÿ›_¶cÏ1"ÏuÃ„PÑû\ì$Z¹“¥t+zZ~QìnÁ»³ô¹ÌõÈÅçmt‡x&:eßIıu d¦%."ô.¶ùå/uQJv“¬åi¡§äæ²RWâ
- zºrèIJ‡ zcßúšgûÒ‹ú#ÄO›vÒÇã)úµ˜õc‹{ğl¡€’5*„o¢'?7/È4%
-B[8­a‘šHdµ¢Ğ¬Ä8ÃÚZr[Ãz@³µWÕ+£)8?Grë·×Y³Šå×‘ó ­–QnwQŞ4¥[?$gÅJë¦í‡¦XÖ´šæ–ÓÚW—Œ4ÀH¾%1X×‰hş¦¶qá–úŠk…Kv’[ W;2wXWaMb5X© ¦ÓevI:ëµˆ/mN:0Oª›b…<€4ÍîÏw6Qòg÷†#ŒT¹ó¸ßí÷-QY±}Y,¹Y,EªJÜ3gı*]›uöúŠ¡£·ç—ı!:ët;¨Û¿œ¼A­ÁÉ cËÜî¼M=4™Ö*ó*ÏœŞ³½{/Öñõ·‡¿°À—'"ä[˜ÖPY«îZ,y¡vúõfÅ.”<ùjõä%ù3jõ*¶½Pj•ãvO|g`ª¬ù9	CH’oå¢q”f†c·äş¿ÿ^¿]eâ¯É®}ÕH²6ÅÀÕÄi•E2SÎ W]3¸@%Tû
-]ş˜îzDIİ|QÎ¡A‘FK9pÉ·ØH-­3‚’%¯Œ€JÑqe`sÁsÌ‹&	4G‚Íò¡²l”é‘\~Åb[9ùQy÷ÈúèÕ}Ãd Íøˆe6§	_±Ì¼ó“¡6î;–Yƒ5ùÉ}¬Á—L¿.Ÿ²¤ÁÙÉ%@k;a×ÅŞ¬µiziÉ0>*šÒcJ~h´ùĞp„c4IS¢qgp™ı~Ã¨›€DqàıÄÙ~2wF	İøãFşÊ„”z3yz"¥Vqˆ\2r¦h‚í|Å©Jäz9áå—Š§zçFÇßİÔµä†Ê"8Œ¬è4nº:ò‰
-#ÄmÇ‹	‘8¦Îù½!å tèÀ%Ì¥ğ„ÒƒÃŸÕ‹Š$ßêí„lßN‹ñf(râáim”’[áŞiáÛŸ!¥ÂÃóîØåaâ f0ìdb$¬‚|¦€ s`ô5l_;ŞBÎ(]ŸˆŸèU!Û›Ù…:áøœ ¢ÃÎtJÙOšm—}sÃxfìés4¹Í$MäİM Y%"†&qCTÈ1Ú¦6·±ü&R5wº¶¸ã'p˜Êºmçšñeº™—xF¢›ğ•¬\-ıe"#á–y‚Û¨0X {.BUÄÔry<Ùhv…jèUPEÓÌtKy6Î¶§%“@389jûÊ,ŠTDœÚJR‘Õö$Ô=Í`ÿı@üº(/é¾7LŠ¹±7ô½çRÕ¼Qš×Çà½b*%ƒ—ÊrYÒ×ô:Oı?Ä#úÆ.3D³°O:|tå|Â·8¢Çg¤Zñ¬Æ:–h[t{ÊãıÌì¹R¸k<š;"½3?ŒØuMça¨ñ©|['3ß|•õÛïÓ§øÁÊ~?À«*è²³5T/"³B­ÒÌlË^èaXYTõvGô’î¤Úi¨ñğ{	Ñ¹ü,Õ×rûu«õmŒ\w¤ÔOƒ£û“xÌÂ®(Ç¤‹ÁVèuìPîëxôˆÛª£é¯c×<QHO9;Şd9W8ï$ü ‘h«ô;
-æ«(ò¤Ák¦˜Ô‹kÅI¾“p<C÷Ù{÷µ‹¬)Ù.cRæÊ9¾!¿RšÃ<Ë§N¼kßÆ_ÅÏ¬”‰åq:«eĞ*v4xq«—Ã¥‡©N¹Ü#t‰½	\-(¡çuèmø^Ò//m}‰ß¾‰°«2b®ïÉ¾¾Üÿş÷ÿ Ëä3 1Á|ó»Rş•¯5m=a)DØ?À:DW´K1ggm£@®XR±l'U_XT¬^¹*†”|`*¾]€é²Fx(Á¼qfqä Åò9‘ôèÚü™¿p¶ıå{(Ó‹l‹füe+4…Ó/’ì{ô³\‹õà/›í¦JûYz~7’8im˜zì’YèŒ×aØå¸ØA;µĞt@"‡îéÌŸ/|ğ<V¼ Û‰Ãì¹6úÍ™aÊ&xF¸‰=©¯Zs'Ä®w‹y0!·÷Ê»»Ùæ®ÛìanL;º¥¼Wô±ƒ´	İ6g
-ŸÄ‹§J+	}[z~?àCÒd|Ğ³îRšTÏé
-r+f-Œú77té~4Lpö#
-	•ÓéörI…ncH·ìâíEçtxrŒZo7Åˆ ÈÅÔ‰b:DÍ¦q‡’K §W¬f@fn@7s¼‚¿á²*Æ#Ñ)[~”g;Jk?2ªC‘×£øùcê×¦ÜÕ7U…"C¨”öêâH²ßT*¾¡¶G§‹ö(g;yßùggˆ.ûƒÎEç‚â×°Sx\èä€Ûñ¨üq#ij--ßG<Ó{l%ËLµğôÉôsù£¾:¨ÔV»ü«ğtv—KÅ?}ùnáßz@GC<rÉw×±W:s>ÁCÆ]ÿZb¥ı™3™ xğØtĞ™ÅŞ »_<”Îíq×òkv¶Ò|Q«¤7ˆÙEï<'ú.¹<±<EËƒQ8vÒoâù€ÒŒ§ÿˆIp‹F·( ¿AÖq(G°¯™¼½nml$¹>ÙkLßÎ3ÀjŞyÌJ6ò‰¿¶ÕüVN-ŸÎãš6"@›¤‡–@3yä[™ñÈwÉÔ‚Ïú» ¹`gæ%†£d^É —®\è?ªñ¿-©ùÛBµ¶2C¤wn? = ¯<u²¢lZ5Y>¯Abù4¥‚B«j±’–˜M(~ñ¡$Ö•WÉOÅWä],}Qi}aÔŠ¾UHŸ%kÒ&=z$O­p¢Ùgøß·y5Nÿ—èúp«Î.g¹O4Óm¥zúM.‡“rhiE÷¥„•0]*`½j‹SŠ>Ôø× Ş}$ z‡„Ñ”
-¤ãìLÊÕ¤uÂõZÊª\VöšI)ü®süœJ?%PUÇåûı§GBÙûõ³†í4/egJ¥Tª ‰ÛVW;V©İ,JÃ$¥`dÂTùp±,Ìtùd+ªùÂ-ˆ¼iÕ`A;Ûm*§ÚDZ(ÓÛöåÓâæ=VHD¥î7(çË»I¬%²?ë>}ÖÛU—ñÍ•'g>›æG ş|İê]™õ
-Üª’æØØ0¯f^–Ñœ.fPUÁœı¸¡X*¥\½_¥ÜçÕ›‘RÆÂñ[R#N"•£¸öÇq´¸ŒŒ¶ßÓ£¦šKì­B àÄ¸HÇÅz£
-ÊÑ‹îÓã¾ÂDT_Å·4©2ÍêÛTh&”v›&Ã4|­:…"—Fœß”qQğŒÕ^Ğ$bi¿ÂÁ²TDæ¶ñê•K	HèjTîÁìù±ë,Z•ù ÌŒgpÇJ—5YšÌ*›¹$çÊTğ›g\?HĞL2_ÉA«ËıÛ,{)ZÕ„˜@SÉw6ıiÄÀ|SÑ	½Ë	ëúŸë'VM¤ÄêÛ‡ª	&©"z]Ú:kBHø× Ñ°N(~Æh˜Ç·œ‘cÛ
-)”çˆ˜<Fì÷^vîk¼·úY·¼óÒ¹gu@T­D+T­•'Ë†Ú›úş¤Gq_‘w¥Î«:`:ÿI˜Pt·´ «œ?,.šÕî*JQ"È_‘1¡’û™ïİÔs'|Ê)aQØÙqÔ=P0[=­JLE\ØéLpê½š3x:4æİ0.HÆÏ;Ïº/ŸjØ€Ê¢Z¦n`Õ˜Ğ([ª„érÓd–Kº cp%At!úİÎæÔ”­©¸œc,Å‚î•™kXæÎÜ‚’¢ìÒ,£Áu¹\±‘{®RxÕş‘‰xÅşÿZ6œßå¿¹¢¿¬ÀXµ9G¥2µ·¸)ÌC«êssM‰µf}¦¡fì@äóƒ„«6æ°Z{;ĞÔÿtD”ˆô|ïÚ	æ†ï§ã”ƒs“Õ‘.Á¬ëÃL"3]çÊfzF_~iÏ(3‰Xü-¬Í/r}•_ÑîÎ3‘>€e9XÆùêÆÀ“<+† Ğ`ï@@>^X7
-)´b(òSÚñì§	XR‰e²n,ÌI5ŒliÉÒÕ@ò†Êˆç`¹CùÈfí>Éy¤UÛ•yÎblÏÓ±e¢¦uãJ’N+†”>b1š½t4…@lİˆdÿ°‹#ÕĞäDÖv™G©qó`æ$½°Üqhº"‰ÇÌ¼*9MŠYÊÑ^qŒ?›R–ì1—IÎ}É9äñş*B1s%›ä#œ=GVz¤~ÊÌm9:Q/-‡êO¤ã¯HXñ8Ã
-şpAªF#×[Z.îãå">Î­Öãåd‹É<–‡ù8DÚI(²š‰‰Ë;^¬©Äµ‚IÕ×*Ã4{”™1òœI¾t\:£#Êı›¬8ä{GN8wÂğŠü+&aÄ&WQu–	ì’iê”?şÏoğ‚4¹%ğÛR/˜m„ôœÀî,¨¤<EoòóÌñ½}ÒÁ«kÊ:DgÂ6Æï%?şğ{ÁaáË¿ßùØE®²´X0Uj-“”ZË Û	[`YòS(ï+ö£\/—<•Å(Åä?ğA¥¡yÆ—s¾EÿÄ[|ß7¶J."EŸtwˆìä&y›Ù4s¼7[S 8îŠKÚ¥·Â²š U7«M!Â³ÿ²·w7‡šî\­'Á©ëĞPß‘¡Üù¤LÏd3UßQ!ÛÛèÁ°0]-tÿˆş9¹!H8:q&±$[TJ©®ûËê‰“W°Ó•”Jûbq`ö•'ŒO·Ò
-bk!QúÈ39o¸äd´ßq|L	sÏ	Æôî
-Ç\¡J«kEÑêC•C/U–êôZµbØªœ%¬ƒïåºñ+«Ò ©5B^*:S*LûF¦#9§ŠŸÈÜQ™…•]§Œ¾RšÀ³†&‘4Cò¯è÷úÏÖÓã~¯¿W±ÿz;m¡›ÏúÇ^±›^ç sPe¤Uqä;g7#4ÊåywÑ¤yEúgïÎÿjUÜÒ¨§WÈ0­ÙëİgÏöŸ6áåËİînWqÖs3Æñ“İ¯6iå»¼Pp)t.‰Ë9‹àãW›Ìså¡Ò­¨ÄÙu¥¬ávq§ER°Ûß}¹×ÍyšâÊ,‰úGtK¥"Sò’x,-·¦RPé™ØE+Øë‹ãÆ^-İ`*ĞjOã~´{'ª)ëTÑ¤d³Æ®›úTÚ±ùÄ%E¢ ü‚’ox¢ª/‚ôrÕÊÁÍ/”°Z‹+,ŒÑ°I†¿ßİ;:0^Ñ¢\$®k:ëß›¬ÄE¶Zz±w¦"Ä+VŒúH•?h#µ$àì	½!Ş*âWûÌB(’é¢#aÇ¥(å³ür=ä€J´QNSéW¹£`(²ejÿ|…¾O?—¨¹Š‹-®‹%yìÂeŠB«ÕALá2xWj™ó6/¸'ºÉ|OF±wë€—IÊ>ı4Gà%g‘
-·W&uu	Ázi 4µÒ!›K'»ªYeÄ)¹ù8˜Ğıõ?½[”%‰Ë<räR$‰¬¡µ°×XTk+şlv„4»b%â`¥kNİ2ºZßå*'ÅuÄçA³Si“'¤R[­©’g¡¹®Ök©4}æ^s)µJ¨Ñ)‚Dÿ£¢.½ô®êgê]?’•‚VıKõ–QFçàM«Æ_b'hm¤EâSc·FÃÉ_KŠ¾'fq£—2EÜ3Vt£×óÙ»»Ù€³Ö™¡ŞèÅe¹ô¥QßèÅlõóÄ	ÀèÕ|™Rˆæ\ú¨Ğ¦ò'åÑ;sğ”ÑC0,Qjšy «b”Á¯‰
-ê+‹_r3	÷°Î¸cQ­»é|2%q¬” 6¦ãnŠ–IkdøZÍ«iD‡ş	ëıÈWÇâìP­t}µ–¿LÛZÖšÎ%¤ş&'SVçÿ+ˆSùëé³BÚ?zÓï°ì¼âŠ¢wŠÛÔ·ø–ZjäoÏ˜„a7çä$AğEbº-Ùë39UÄı”ÇÕVXIëšÊ4>ÿô*àg–¥§‰H÷·^öæÍOÂÎT8…üp–KÕ …¥1ß¹°Kªc¹.ùE‚ö'>±¡ÎHaç¡¹™Ë³ÊŞ³ßøqpãâ0ú¥÷ğŞ”ŒgÜÍ¡Ñxëù·Ú„ïO«|5»ŒâÍ3™ÑÍLİ2˜:â(~%oeX–‘À·êdBƒ¡-é°S/ÿƒŠ&B³¢‹9òWL9Rİ™ºD$ÁĞ;(­B©ìNzêò	…x*îîù!±â‰Ğµ/%œĞ,CE¹dRò…•©îÖªT-Ê­B„ qßUŠI:"‰HXúC«HG)åŞ18Cå¾¿ìÄ2A’R:æ‹¿¯¯*]áHpÜïöû9?=5œ3…òúq“¯avò¨ µuê!®QO¯~úÿ—¢½¼2nğô wÕï_¢7³Îyç½}}r¡óÎàİ)ô»×4ìœ¿³„¸<óoo0¨àÏ1Ø L’¿¡‚xE¤d€È;.+Äl“ sA…ªOa,_ÅQ'¦g>Kù/JuÇäŸ J?tBç½Cq®Éøvœ	“Âô>”gÍ‚J¿6c.º|!#Î’S¼”3{öVÆÅw•4Œyb \ç+‚”ˆg‹Çİô»ŠÄ{¹ÔO¦®½ù‚Ç„,êŒÜœÏœx­9şLá<}Q"£¨*Æ”˜x©“ƒY?ø DÌ¨WD¦:v ÊNÔ¨#BŠJz7´Úi9lÂ)ŠÒv[†UP’é£mÆÉ
-O)}‰ì“˜±B­€J+g¤ùæÌÃ‹|^ŠIl`p´WsĞWÕéğÜ.vm½§»Lêøîo\¾>…U`Û4ö¿ºõg*W}¿OşµúâCÓ™WLZ+dO)ºÕP¹cØ«•éé‹øYgæ…ë0¯”sìáßà¸§`ƒŠ'7¬Ãu×e™µÆ	.&À}{˜|®ÌzTÉ Íß!naeÔ‹HTĞ¦/ğblå5æ@´©4%ÄÕÕæV±İÙóæJ‘­M`*)e­™³:×ŠJjmœ«¸f@k Ë¥nĞÌª©(>Ã'½¹ªB‡/Ü¾|¯ŸA%Ä{Vˆsy*9D«Ñ¤!r¬=eù¥ÕÃ,]:³t¢ê_+Ò,//‡cHƒÜIÖ“^‹.›—ŞS„ë‡é>¡•†aÅdz$ 5{, ­ßè[ÊÃ@Q˜Â¡ğ³aÂö$YûRçQ•–+Ÿ§]Ò’@šöÿT¢S9Pá)“f°àóéLæE˜¢K1Eú²>G:ƒW©†«Á’:«M©yí‡ñ}¥5ŒóL¦*L–Vşƒ*®„Ï®|ÄmólÏh˜L„.Šv—BÓÕæeôf¦È—U¶5…§8Âh€½‰³ÚùãYÖ%kwÇˆ7îÕoÙ@@<Í~ÓJŞ2°§ÒŸídĞètwX½HWo-ˆÍ´ÃÂˆWø½9Ÿ6Ğ»2Ô’Hoî0 ?ÑU3+¦¬¼¶ò÷XË™Õ¹_îã(T‰ïeÕªî
-Ë£ùÎWl·úKoª$ PiÅ..*:Òİ8¡$cìÊşrÃ3Sh*@+¿g_š(lB¦(e;ŠxV[MUõ¸¤•RAºËŠD½+W57	NÌY’M4!Liëtéµê‹bE¯;cmeI¾v.”â@FÙmHé ™™pEñî!úó‘ï"¾d!áì !Ç¨Õñ|ïvîCØĞâ*SzA™=äùk˜DvÂ×q­õg£‚8YÒµPÂ*g”ëü>™øéU[{ıy¢×Ğ'€$—œ¢° ¨\©´&²oâ–¥oPÁÙ÷„°ké+·g«< ¦Ó›‚$š…oÏ¾â2]ÏŞó-x´Ãr&dä»f Ÿ…$DËoÅ¿aÊÚèdüe	Û3æúOÅh9!O.ÎÊïB´§••ÑØõã	%u”ÙS\ IA^8ÉÎ¼*ùÊÎëQ­››ÒJ£…ËãõUÿ  ÿÿ `mf^
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                        Column {
+                                            Text(
+                                                "Mode Edit Pesanan Nota #${editingOrderId}",
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Text(
+                                                "Ubah rincian pesanan lalu simpan untuk memperbarui tanpa duplikasi.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            editingOrderId = null
+                                            namaPesananText = ""
+                                            qtyOrderText = ""
+                                            totalHargaJualText = ""
+                                            hargaSatuanText = ""
+                                            jumlahPlastikText = ""
+                                        }
+                                    ) {
+                                        Text("Batal Edit", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Header Banner Card
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF3EEFA)),
+                            border = BorderStroke(1.dp, Color(0xFFE4DAF7)),
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Default.Calculate, contentDescription = null, tint = Color(0xFF6A4C93), modifier = Modifier.size(32.dp))
+                                Column {
+                                    Text(
+                                        text = "Ploting Pos",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF3B2369)
+                                    )
+                                    Text(
+                                        text = "Sesuaikan rincian HPP (termasuk nilai 0). Sistem otomatis memploting nominal ke sub-anggaran pos.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF554B6E)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Section: Rincian HPP / Komponen Anggaran (Bisa diisi 0)
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Tune, contentDescription = null, tint = colorScheme.primary)
+                                        Text(
+                                            text = "Rincian Komponen Anggaran / HPP",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colorScheme.primary
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .background(MintGreen.copy(alpha = 0.2f), RoundedCornerShape(100.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "Bolehkah Nilai 0",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF2E7D32)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "Atur tarif modal & persentase operasional. Nilai 0 diperbolehkan jika komponen tidak digunakan.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+
+                                // Unit Cost HPPs
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = kertasHppText,
+                                        onValueChange = { kertasHppText = it },
+                                        label = { Text("HPP Kertas (Rp/Unit)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_hpp_kertas"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                    OutlinedTextField(
+                                        value = tintaHppText,
+                                        onValueChange = { tintaHppText = it },
+                                        label = { Text("HPP Tinta (Rp/Unit)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_hpp_tinta"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = pengemasanHppText,
+                                    onValueChange = { pengemasanHppText = it },
+                                    label = { Text("HPP Pengemasan/Plastik (Rp/Plastik)") },
+                                    modifier = Modifier.fillMaxWidth().testTag("input_nota_hpp_pengemasan"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    colors = customFieldColors,
+                                    shape = customFieldShape,
+                                    singleLine = true
+                                )
+
+                                // Percentage HPPs
+                                Text(
+                                    text = "Persentase Alokasi Operasional (%)",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.onSurface
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = wastePctText,
+                                        onValueChange = { wastePctText = it },
+                                        label = { Text("Waste (%)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_pct_waste"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                    OutlinedTextField(
+                                        value = tenagaKerjaPctText,
+                                        onValueChange = { tenagaKerjaPctText = it },
+                                        label = { Text("Tenaga Kerja (%)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_pct_tk"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = listrikPctText,
+                                        onValueChange = { listrikPctText = it },
+                                        label = { Text("Listrik (%)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_pct_listrik"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                    OutlinedTextField(
+                                        value = maintenancePctText,
+                                        onValueChange = { maintenancePctText = it },
+                                        label = { Text("Maintenance (%)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_pct_maint"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Section: Input Data Pesanan Nota
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Text(
+                                    text = "Rincian Transaksi Pesanan Nota",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.primary
+                                )
+
+                                // Tanggal
+                                OutlinedTextField(
+                                    value = tanggal,
+                                    onValueChange = { tanggal = it },
+                                    label = { Text("Tanggal Transaksi (YYYY-MM-DD)") },
+                                    modifier = Modifier.fillMaxWidth().testTag("input_nota_tanggal"),
+                                    leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { showDatePicker = true }) {
+                                            Icon(Icons.Default.DateRange, contentDescription = "Pilih Tanggal")
+                                        }
+                                    },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape,
+                                    singleLine = true
+                                )
+
+                                // Nama Pesanan / Deskripsi
+                                OutlinedTextField(
+                                    value = namaPesananText,
+                                    onValueChange = { namaPesananText = it },
+                                    label = { Text("Nama Pemesan / Deskripsi Order Nota") },
+                                    placeholder = { Text("Contoh: Toko Barokah - Nota 2 Rangkap NCR (100 Buku)") },
+                                    modifier = Modifier.fillMaxWidth().testTag("input_nota_nama"),
+                                    leadingIcon = { Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape,
+                                    singleLine = true
+                                )
+
+                                // Qty & Plastik
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = qtyOrderText,
+                                        onValueChange = {
+                                            qtyOrderText = it
+                                            val qty = parseIntInput(it) ?: 0
+                                            val totalVal = parseDoubleInput(totalHargaJualText)
+                                            if (qty > 0 && totalVal != null) {
+                                                hargaSatuanText = formatDouble(totalVal / qty)
+                                            }
+                                        },
+                                        label = { Text("Jumlah Pesanan") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_qty"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+
+                                    OutlinedTextField(
+                                        value = jumlahPlastikText,
+                                        onValueChange = { jumlahPlastikText = it },
+                                        label = { Text("Plastik Bungkus") },
+                                        placeholder = { Text("0") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_plastik"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                }
+
+                                // Total Harga Jual & Harga Satuan
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = totalHargaJualText,
+                                        onValueChange = {
+                                            totalHargaJualText = it
+                                            val qty = parseIntInput(qtyOrderText) ?: 0
+                                            val totalVal = parseDoubleInput(it)
+                                            if (qty > 0 && totalVal != null) {
+                                                hargaSatuanText = formatDouble(totalVal / qty)
+                                            }
+                                        },
+                                        label = { Text("Total Harga Jual (Rp)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_total_jual"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+
+                                    OutlinedTextField(
+                                        value = hargaSatuanText,
+                                        onValueChange = {
+                                            hargaSatuanText = it
+                                            val qty = parseIntInput(qtyOrderText) ?: 0
+                                            val hargaVal = parseDoubleInput(it)
+                                            if (qty > 0 && hargaVal != null) {
+                                                totalHargaJualText = formatDouble(qty * hargaVal)
+                                            }
+                                        },
+                                        label = { Text("Harga Satuan (Rp)") },
+                                        modifier = Modifier.weight(1f).testTag("input_nota_harga_satuan"),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        colors = customFieldColors,
+                                        shape = customFieldShape,
+                                        singleLine = true
+                                    )
+                                }
+
+                                // Status Pembayaran
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Status:",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                    ElevatedFilterChip(
+                                        selected = isLunas,
+                                        onClick = { isLunas = true },
+                                        label = { Text("Lunas") },
+                                        modifier = Modifier.weight(1f).testTag("chip_nota_lunas"),
+                                        leadingIcon = if (isLunas) {
+                                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                        } else null
+                                    )
+                                    ElevatedFilterChip(
+                                        selected = !isLunas,
+                                        onClick = { isLunas = false },
+                                        label = { Text("Belum Lunas") },
+                                        modifier = Modifier.weight(1f).testTag("chip_nota_belum"),
+                                        leadingIcon = if (!isLunas) {
+                                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                        } else null
+                                    )
+                                }
+
+                                // Sync global switch
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Terapkan acuan HPP ini ke sistem global",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                    Switch(
+                                        checked = syncGlobalSettings,
+                                        onCheckedChange = { syncGlobalSettings = it },
+                                        modifier = Modifier.testTag("switch_nota_sync_global")
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Section: LIVE REAL-TIME PLOTTING BREAKDOWN CARD
+                    item {
+                        val qtyVal = parseIntInput(qtyOrderText) ?: 0
+                        val totalJualVal = parseDoubleInput(totalHargaJualText) ?: 0.0
+                        val plastikVal = parseIntInput(jumlahPlastikText) ?: 0
+
+                        val kHpp = parseDoubleInput(kertasHppText) ?: 0.0
+                        val tHpp = parseDoubleInput(tintaHppText) ?: 0.0
+                        val pHpp = parseDoubleInput(pengemasanHppText) ?: 0.0
+                        val wPct = (parseDecimalDouble(wastePctText) ?: 0.0) / 100.0
+                        val tkPct = (parseDecimalDouble(tenagaKerjaPctText) ?: 0.0) / 100.0
+                        val lPct = (parseDecimalDouble(listrikPctText) ?: 0.0) / 100.0
+                        val mPct = (parseDecimalDouble(maintenancePctText) ?: 0.0) / 100.0
+
+                        val calcKertas = qtyVal.toDouble() * kHpp
+                        val calcTinta = qtyVal.toDouble() * tHpp
+                        val calcPengemasan = plastikVal.toDouble() * pHpp
+                        val calcWaste = wPct * totalJualVal
+                        val calcTK = tkPct * totalJualVal
+                        val calcListrik = lPct * totalJualVal
+                        val calcMaint = mPct * totalJualVal
+
+                        val totalModal = calcKertas + calcTinta + calcPengemasan + calcWaste + calcTK + calcListrik + calcMaint
+                        val calcSisaLaba = totalJualVal - totalModal
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = xœì=Ûr7²ïù
+„•u¨Ø¡.¶lG'J–¤¨XkÉÖŠ²][uª\	‘‡3Ü¹XVUo9Ÿv¾ät˜û ƒR“Z<H$gpkt7}ÃÄs<<™³%ë‘M'lëÑWÄP®<Ê|rHâÃ8ô½ëîöö{ÓÕ#2É´·òù’ú·½‰·ºíRg5§Pk§·½UÓsØrÏ…÷‡ÔŸ±k9aĞ›À—Qü°;•?2o?AliÛŞ"ŸŒı='Zº]ã;X–Ş”_s„3õ±·¢Ó)wgİİç8óü°|`~È'Ôéû>ug .7„æ2ßzÁ
+c:¸íîîge33,ŞMıÔtÓ»æsF?¾ãÓpŞµ˜–¹çóß<74MrŒ“°ğ†1×®ÕpŸ¹q‹ñçŞş0ÿ­zÇ¹­mÒrX¬¡×|ŒvóÆbÑm×bM\la€åd”‡‚"ËŞ9gÃ9õC¤~˜™±`âó•¢I7rœG$äb¤üÁnŒX.ÙÇĞ~°„Pzí¼¤Î"rhÀÉ£Î÷—|ÉÈ¹ã…0ª9÷‚ı`	Â[‡!yPXHNK1ŸğvåÍ|ºšßöB:ìŒMy´lÖò5@ğã³9û8ùÒxÎ´YKÒÕ·nÇniî¬Şj¶xjá®=IÃ‹hÅé¼z€øÿˆ¨ó–:–,Ëı,–n¡FCŸ6[­uWª~•î¾ª}åEÂZø{·jX^:Üeo) Ò·ê›ı@ÂC¶ !‡áëk;¸şá°nçÈ[®XH^³¤@¥æD~yD:ß|ÊáÇâÅjµu·¹<ìXâG¡›K`RTõ">—;	×îäœ!«¦uUOéåîV²»ğ®/Zöø*3²M.¢€.T§â·L}w¶ İ›óIH¾#»;;[wkDæÒÅ%û5åËROáb]Fù<’úVêÊÙ@Og”ãÖFİ	S½‰_J}-ó}Õ‹õ$$È§ŒèdN>‘®C¯ì¨@Z¬ l„ğ-òıO›d6%
+b¹qË†EB,MD¢FÅÒHŒ{jwÈ–{€–&0ÁÒ\\Ã¢v~‰äk×nöWŞôv¼„y7o[·å·‘ó°Tn°îXÂµf/BcYk]:İobÓPhÆR»<bÙ[®A`¹'hÚI¾XZ]rÒ€`ù™Á}QÄæO*üšÈ’CÔílU­$aNÀÖ$™Mkş8±z{›Œy@É)½¢dÀü€ÏïUÿcÚ‚t`_ïŠN3ß‹Üi32A¤AqÁ! ñàÎ‰¿fa†íîÎÇc(£ÁhÔˆ.p`l:ô|—ùã9]±îîµ~KP$ªÄ=û­ÿ/¥k“zØÒF{ÅĞÑë³óÑ%9íúd0ºŸ¼ İñÉ¸ßts»·mƒz,Y^k h‘p†O÷ï=¿Œo¿|—¨"¨"ßùXü}q~ş¥¬`M%Ï¯·4«PñæŸT«—É_Q«§YötE÷FÏïézcÀvO«Ÿhœ*ó}Ï?cA@gŒ|-µÿ&¾ÚNo‡c
+·²ııuırU‰c¢úªV’µ-®'N›,’©hPk Å¢Ú@BDaè¹äÜ÷&°ä°ºåŠºÕ¨cFÙ”	<wèğÉ&Y/8 Zúßá-¼»¢~ÀNÜğÄ]Ea~{VmD¹z¢ÂV£DÜÖ‘]9L6'¾ şŒâöÎ±Ê˜†u«šÍ<m’ŸíáŒÉ‘Ä";ø1eB’éOÛâMÁ~àÔe5@¥.Áï×héĞù¹|šŒmÇÎN€úûªé.„¾¦Z3Ô´ˆÆHÚ¦Á•¦ÁU¢ÂoÓªĞº’®l–M8²õîªéáq¶Í-X±İk,ô­‡BU/4õkõáè»p¤R~­æ—úæ—©^^ÛE½†hÇ¥KzÎ`%Mõx0p¨»ènÙZrˆ¦@ötExÀ	6MV°7@ë„†4"S,|¾‚gÒ™ÆZüºcÕÏÂÈwÿ.âšÛ~<wÁ	ßøıwÁ~BJ»™ÿC0˜±€&2³( »âs2¥>';àT3ì:púãJñÔnâò "¸3ù5’?ÏÔk_)gnGÁ­;ùÅñ®¨3fÂ]"°…ÎÎn@aN/ZMAD:æH¦<mÈşÜì 0tÜ%ì¥ğ˜ÓCÅ°QÅGG–ß¨vÌ¶¡"2÷ãÍqdõ¢Qı”İ¢¥QÕ<+…êÈv?Ÿ‚8<L9b†ÁN¦6Ç‡lÁ­‚} ÄMÀz×Ü’O eöøT=‚£B¾7»/v"ñ9n†ë¶ŸKŸº]\ürFƒhaìÉ´9ÍÄ%¤îlF¸!õÕ¾~f7DnQØÃ–M,¿±TMÁÇgüXY·Ç¯Å¾‹Ù9§vÈ]tN®Î|³o"'á¦È!äoMTĞw T<8\
+Ìµ#şw¤<Ş0'Zù“-*ÕĞPå?¨RSìtKÅm\,O7ËíÚ)p[%ƒÔÕº““k*qp7 ‘Aµ)%´%‚Í`ÿ—ømQ>£ø“ ¸…dRXU”ôë{Ïj’ìj”•Evõ
+Ú »J%E¬V¯ód› á_Ò+¨±+Ñ7<œÌaøä‚ßĞ[ù\áWŸ!AšÏfühc‰njîÍ…¢µ»ogÏí…,/é¬Û	¢«%ßãÙı½3ß_‰ãZ‡a€æc˜Q…Myo½øá›o’£ó~û#xKVş÷1ıÀŒ¾üUÚæ€ÿã04QX¡ınU7bÉ×·ÑÈ"`HçœùWpHç‰všÀ/ÑS7f:ç¾°T}M¤|òÊCOá{Vë71r}&¥şÈpá€Œ¦ÑD„]Á	Àú%â°ûr¾`ÜVM?Ö3/íga
+	•òfé\‘ŞYğ#ÑÖ!ôz×a‘
+ªBà„‘0è"…Â™ùÃ
+–
+æS.EÍcğta~Å ¿¼ëR…YúÇ³tŸı‚Ãñî#˜ìÉlµ4b“²W†,éŒ½#<¿O¸×^{¼n?k¤L¬Ói eÓîõh»·Z¹ft†äpØåsêNñhŒ~‘sö½¸Øí`½j6ãzú§»ªbæõ=Ù£CŒ
+ÿ÷?ÿKúD1`Ä”ÊÅ'âHyğß =´†5”!ß£[–Šåm‹ÙÌßÙÙ!Ûd…-·o8£bÙ&êh#z ±zí@,€}P_¯˜ÒÀ€5¤+sÆQÈÉ*}/àÊ:×^è-¼ßöÒz$ZÂA¶+³öÿö(4EÁ*˜‰ìÁçLğ¼¼Õ³¤¿M{~ãnÖo÷…©Ç[üŠ;\`w(';­ĞtÌBkºğ–+Ïe®À­)]ÁÁvÊ…=W¶M~å
+{Â”.àÁ,ré0¯»äuÜ[*ƒ	¥½7»º[=éº=¥.•FÁ¤£[Ø{U;D´6…eãsü´bn4'FâĞ·Ôóû?ø—,>ŒÖàYÈè (­˜­0âÒ›Í tß^¯p5¨`‹ˆÜå¸*ŠÖg¢oIÀ@N‡å•’
+,c Köêõ«şËË“cÒ}}|¼E #|dsF0D—,æQ— É¯DÍÍÌP7I¼ÂïxXUãÉğ¹ ?AÎ³ÆÖ(Éu y]ÀÏ?9Ö˜nÊÑ|R5(2”Jé±ARIş­âÎà—ıÙƒíä]ÿ_ıKr>÷_õ_~]öK¯+î¶—ôªšŒ¤‘4±–V¯#LàâkñÇê-<¼™|®~ÕsQ•ØjÓo¥·ó@LA%?İ}Kø÷!òÑ€^9ì«ëÈ­œ¹œàØ]¬°Òş$ÇOP½x†Û´ß_Dî˜:SO½”Ìí€H×ö6?ÛÌ|H·¢7ŒÙ%o\~Ğºœ!ŒÙe©÷}à5ÔŸÌÿ1ÿ–\İ-¯  ŸÈ2
+ ½…ìõu·ÓÙRğÕ„¾ı˜;Ğ~M½1[F+#ò©obÕü£‚Z>™ÇµhZÙˆmâº
+Í²#”Oö,™XğÅ@?)öXv^b4ŒÁp˜m:uå"¿ÿ®Çÿ^FÍßSª• ›"œ¹=Ÿ‘¿’ĞXM‹YÓªu“ÕóÇÖ‘›9
+]°â›M ¿äPbëÊaü¨\%»Š•ÖÁ­ ÎAC«X2‹ôàAvj%ŠÿNéo·E5Pş/ÖõñTgµO´Ğ=Jô,ğK!‡SåPjEÈ®KÅV"t©ˆ	pÔVTˆŠ>Ò{×(Ş}`."zŸáÒI~&ÕjÒ6áú-¥.—UsÍd&ü®ü¤ŸŠVMÇ´şèÉ´PU¿}Ö°İ’æ¥Š¦LêH£
+ò‰^¹¾ÚQ§v{-US9sJus›cÇÚ—=÷-¾>œãÑ×>·ÿ¦›Œz+f3÷¹ĞŸ¤hßâ)H
+¼ÊKv;6Á÷z §6‰´Ø2u_Oó˜–4ïqtò6©ûFq­Q?)æU‘%K»M¬ÙŸ<înçÒ=œy“¾…Ïfnóh´\…·õ®Ìõ
+\ìDÅbdÂ-
+(Ğé»FÚà< † L_§xØ1€ÊB)×î©ÈÍã„3–È/åF’EGqíM¢ yqí½ƒ#3¶"wí&T’—ù¸‚·å0t­=<9LDúöMû–ãŠª@.;Ål‡e%é»úTh´Û4·«èG¹àkªl\5âüV&ñO1¶.ÙHûŒ•³î-ÙÓÆáa¶-cCJ/ĞÊhÅ€z7ò¬¾k@Û›8|ÕÕæ°od²À3VÖ49(Û¹$§{ÖdÎWïåIIn\ßdZ³É|•ZM×o«L÷™hUf‚Å$ß5é¯F,Ÿ¨wù±ÙÇŞÇö‰Uc)Qú0µIšXD½.Ír«neOÌàß†mBñsFÃ"¾ŒˆÛÖHñd¤#I0EŒŞß<ü¡ÿ¥Æ{›ÉêãÒ3/Ì=¯aT#‰jT­ZÊjÂím}R|lÈ»Ò†àtVçß’&İ¥d“óGƒƒ¦ŞİÃÄ)*ù6a ¹Ÿzî¬;áÉ	ËÂş£çGƒ}Ãf[Ï«bS‘vúSšx¯ÆÁón˜”$ãgı§ƒÔl&G½L½¨	¡1k©R¦Ë« (,— 	º’ ‡'(tó:›Ó¦lMep*Œi”|¯Ê\#2wxà#²`·âĞœ	FÃãrµb"¢ô\…öôş‘±x%şÿQ6œOÙïRÑ¿UF½9Ç¤2mnq3˜‡4Põ¤¹¦ÂZs¦¡ÍØØÇE	×lÌ¹¦€§9;ĞÜ»9%dCÏ½æşÒ²~2ÎlpnLÀ%šU>Â„ ò8cĞuñQ>Ó3¹û¹·€Í$ñ·›Ÿ{¡§‚şEˆÿîÎS•>@d9Hã|ëÆ “<† ^¨ÁŞ~f ÅxáºQd²@†’}«v<“„
+"©D‚\7á†dF>4$u5ÈxCÃÙOW¨Ù\»NÙ<Ò¦åÊ½×`lÏ’±å¢¦ëÆ'6)y¥Áhö’Ñ”±ëF”õë;44-›ÈºÙB&ã“QjÒ<‡9e*¤+Mìs…y«}§ªeb–
+|ä­8ËwÎ’'óì+1İWĞ¡|Mö§	ÅÌNó»<	çéH¶•Ôw¹¹¥£[È÷
+¨®y[!¬’Á@Íë+äËÑ”Ùğ3À}˜ñaZÓÉ>T“y˜æÃdI'Êj¦&]ñï3#H‘GEö%+S6L‹W…£¸3eÏ}ft¢7Ë‹C{Äƒ%‚öïˆ¡4P”6¹C"v²¢eEìÓÔKù:ú?¿ +h|J§£^2Û(é9n»¿IyNúîåçw	œ>á/zuÍEg¾êLÙÆä¹äÛo>•î¾ı¹Sên"Ç®ÒpU¥ÅÂq˜RkÙ¤ÔJƒn§ÀYÉÏ ¼×¬Gµ^-yVÉ©*T¶û^*	Í³>œË%ú}$×½ó¨âP¡RôÕ`Aİ"?¹©DŞÍ,š=ŞÛÁ9³&Hp*t*jéNV[J„ÿò§Ÿ&îÜZº7Hµ^¦¶íªOªôLMc¦Ú;*±a{›¼`3 xĞRA÷àëtÆˆrt’›Ä6ÉØ¢r­TZáÚ¸¿¬Ÿ8y;]¥hí‹›ˆk~ó„5u­ M­s*$ª>ò,›7<ãdôxôüøóû8»"™Tim­(µúPãĞ+•¥uz­V1l:g‰ÆÁ÷rYv«#.¶ª4,f£’—ÊÎ”Ó¾•é¨Îœ£ÛÏÇlÉÍAfe!Ád×©ÚK?MàyC“Jš‘ñ¯GÏJÖÓãÑho´§Yÿz;m©›çOGÇıa¹›a¿¿¯3ÒšväfÎnVhTÈ+òæUœä¾9#ò§uq«F=½F†éšµŞ}útÿñ“Ò"üğÃî`w` uëÜÁbcÏùÉ>Ö›Šjå»¢Pğ
+Sèœ3G¹ˆà“G›Ü{Õã™SQ…³ëZYÃ›Å–YÁîh÷‡½AÁÓ´ˆY]òÏğ¤"™Sòœ¹"­ [)¨r‰lì¢šíõùñ¾Ø^ºÁhĞj¯Æı:._œ¨f¼§ÂŠ'uâÅV{ßÜGkg´$bû‰ÅJŠXAxGâ_d¢ª;‚Az…ÛKÊÁ­;`â®Å5 ca4Üä†ÿx°w´oÑ²\¤kuÖÿ‘;]k;TÙjá`Ïç!Ä+ß«ô‘&ĞÜ%±½$¡ohoUñ«#a!TÉôÈ)w ¥<‘ß!{r®­ ºÑFëW¹cØP²~”‰ıó||®Ps•­‹yš…Ë”…ÖFü51ƒËàçRdwŞÍîñ‚n	ß“«È½åèe’lŸ^’#ğØYhÂíµY][Fp¿< ‹YéÏ¥“‡j^ñ’İ^yÔŸÂúz7oVUIâr¯y7†$‘-´Í5zm…ÁŸ­#ÍC¬BÔºæ´½F·ÖwYç¤xñyXš©´­Ù@'¤Q[]sK^Íµ^¯eÒôÙ{Í%Ü*æF/2$ø¢.zÖu³õ‹nŸ@©—Â¢¢_2ØÓ`ŞÄöÖøsÊın'¹$>1v×h8eµøÒ÷Ø,nU)w‰{ÎŠnU½x#{lw·pş‚ua¨·ª˜^—õ­*æo? ¬ª¯)ÅhÎÔgÀ„6ÚG5ªoDï/ÑS¦ö2tå‰€ÃRWM„Ò`XeğÛÄêk‹_ÙbîÑ8ãNƒÛº7O¦"®C\%XÓñ
+OŠ“ÖdÛ¯Õ¼ÚFtÔ¿Ñx=Š·F+²øV¨Uº¾Và¯Ò¶V•Mç2ÿR)õùÿJâTñxú´”öNú}‘Wñƒò³CI›ú#‚>ÇÊŸ¥•ùÏgLÃ°7çä”½ÁS‰]`Y4Ùës9UÔùTÆÕj¬¤mMe59ÿä(àåÀ2¬‰HWç·a‹æ'eg*Q¡$Îj©zcHei,v®ì’æX®sy€şÔ'‘à"¨3R4ó¨9™gg•?g¿ğ"æĞ ¸ô*ÏáÃ9›,¤›ÃFOàm¬ÿÕ¿Ö&|¢Wğµ0ì
+·`Âd‹“İ%f0åŠÿ ¯6,ËÊàÏêdÃƒ±¤|8Ó.ÿƒ‰'biÄì¯œrDßºD%Á¨wPZ‡S5£ôÄå/N©¤»çûØŠ§B×î*<9±4•’IuÊqM…r·®áJzQn&„Eú®âPlÒe˜DCß`,št”™Ü;4Tíû‹ÉN&H2JÇøëo•Ö8£QÁOÏÜN‚™ÊùşqSÂP‡2*@¡gImxˆ×¨§×?ıJşÔCÀ¡uÁ·ÇÃ‹ÑèÕyÑ?íŸõ_‘Ó×¿œ¼"ÈYüæ%ı_ú'ä²ö¦aÛÅˆËSoÆİñÄÁ_b°E˜¤¬MğqM¤¤OØ’rG\ÄÜ$æ
+„ª@˜†QqÔÂù©'R~aÅÌ½cÙG¥‰‰úhç‡'üšMn'¹0)
+5Fx=k¾©ägËflÃEÓ
+QzK‘œjlØKåf/jå\|×IÃXdÊu^û¦D<å’ß4‰÷
+©Ÿl]{sşò%;[¬3rË}æÄí.éGhçÉó
+ÅtcL…‰w#7ÄÚl|P!f´»DF; ³mÔ!A¥z7´Öi9š„S”¥íª,« –é‘m±“•Ş2úÇØ—ÙŒjRysF’oÎ>¼HlƒÏªS1™‚,H{=}Óİ3}’; n[ï`•YßıÎù/Gêb\¶û_Ûûg´P¼Oş
+Up¡ÉÌ5“®²ç€îÈ5LîÍUÏÆôôeül3óşÊáÂ+åŒºôW$÷ÄŒaPÑtÆĞ:Ü.i.Ô3T,¸º&N@Ô¾Œ?k³UD2ÔæïP§°*î&E$´¡‚¼Œ­ú9Ô¥"UÍâæÛæÖ±İ5ß›µ"[áTÎÚ2'¦>×‰KÖÚ8×qÍÀ²,—usÀbwë˜‰ã|ª7WitXÙâÂÅáõ¨à¹£2[üÂ.âL©òçÒ±€Æ&‘“Z*+‚¶¾ÍJĞÙ¥5?Õ¤YN‡LƒÜá	Çb«„ËöWï™aèxEºO,ÕÄp…ÑŠØ’–Í’–û7úVîa¨¨ BáPzl™°=NÖê<ti¹ŠyÚ3ZLÓş_FtªnTyÊ$,ä|úÓ%wÑ¡ˆº”ÓP$•ës¤‹ö´z`|¨o¾”ÔÙlJ-j?¬Ï+ZÔ°Î3™¨0EZù÷ª¸Ş39»êa0µQÂ³=§a²º íÎ•¦k3˜—Ó›Ù"_^Ù¶)ü{ICJÆÔòµĞîÔ›,tXÃî3#ŞB¹W¿A9òeş—nüÆå­höeæk/´>V¯èİbí°2â•oÎçCÌõ®‚u3¬·@Ä‹uÕÂŠ™U^7ò÷¸—²»ç>]Ç«Pq%¹–º%49–Gû•×,‘´úgjš$ TiEõÏ}a5N€eLp»j~¸‘™)jnÀR}Î>·QØBQ*V”È¬.Mu4ºÛãâRÉa•‰z×0®Öœ$$3I6É”	=¦­«K¯Õ^+{İYk++òµp¡rÊnKN‡ÉÌ¸/Å»äÒ[^y‘ ØQN.é2"İ¾ë¹·Ksèà‚–¡tü6{Ìó·aÙ~ÁŒkİ¿¤1Hï…êœQ®‹ëdã§§·ö0x<­×ĞÇe<^
+ŠÂRCÕJ¥{bûMBÜòüopö\%ì6ô•ë mUG´tz3°D»ğí2íÓí\°±šoÑ«h¿ToBV¾kJñEÀÂE~[¼ükE	…= GPÆO¯°10c¹‚—<£iÈ™\\\¿‹ÑŞ¬L&MÕÁf¸Àây‘’ùR—†|mç¿ûQ­Û›Ò*£…«ãë/Tı   ÿÿ èŠ
