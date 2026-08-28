@@ -553,6 +553,19 @@ class FirestoreSyncManager(
                 "updatedAt" to com.google.firebase.Timestamp.now()
             )
             profileDoc.set(data, com.google.firebase.firestore.SetOptions.merge()).await()
+
+            val authUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (authUser != null) {
+                try {
+                    db.collection("users").document(authUser.uid).set(data, com.google.firebase.firestore.SetOptions.merge()).await()
+                    authUser.email?.let { email ->
+                        if (email.isNotBlank()) {
+                            db.collection("users").document(email).set(data, com.google.firebase.firestore.SetOptions.merge()).await()
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
             updateLastSyncTime()
             Log.i("FirestoreSyncManager", "Profile synced to cloud successfully: $adminName")
         } catch (e: Throwable) {

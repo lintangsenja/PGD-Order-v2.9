@@ -1,5 +1,10 @@
 package com.example
 
+import com.example.ui.screens.ProfileAvatar
+import com.example.ui.screens.ProfileScreen
+import com.example.ui.screens.AuditSelisihKasScreen
+import com.example.util.ImageUtils
+
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -269,11 +274,11 @@ fun MainAppScreen(
     var showExitDialog by remember { mutableStateOf(false) }
     val sadQuotes = remember {
         listOf(
-            "Pergi bukan berarti melupakan, tapi terkadang tinggal hanya akan menambah beban kenangan... Apakah kamu yakin ingin meninggalkan aplikasi ini? ðŸ˜¢",
-            "Setiap pertemuan pasti ada perpisahan, tapi apakah kita harus berpisah secepat ini? Catatan keuanganmu akan merindukanmu... ðŸ’”",
-            "Kamu mau pergi? Padahal baru saja kita mulai merapikan masa depan keuanganmu bersama-sama... ðŸ¥º",
-            "Jangan pergi dulu... Masih banyak mimpi dan saldo yang perlu kita jaga bersama di PGD Order. ðŸŒ§ï¸",
-            "Langkahmu untuk keluar terasa begitu berat bagi kami. Yakin tidak ingin bertahan sebentar lagi? ðŸ˜­"
+            "Pergi bukan berarti melupakan, tapi terkadang tinggal hanya akan menambah beban kenangan... Apakah kamu yakin ingin meninggalkan aplikasi ini? ",
+            "Setiap pertemuan pasti ada perpisahan, tapi apakah kita harus berpisah secepat ini? Catatan keuanganmu akan merindukanmu... ",
+            "Kamu mau pergi? Padahal baru saja kita mulai merapikan masa depan keuanganmu bersama-sama... ",
+            "Jangan pergi dulu... Masih banyak mimpi dan saldo yang perlu kita jaga bersama di PGD Order. ",
+            "Langkahmu untuk keluar terasa begitu berat bagi kami. Yakin tidak ingin bertahan sebentar lagi? "
         )
     }
     var currentQuote by remember { mutableStateOf(sadQuotes.first()) }
@@ -384,6 +389,7 @@ fun MainAppScreen(
                     // Menu items
                     val menuItems = listOf(
                         NavigationDrawerItemData("Order Nota", "order_nota", Icons.Default.ReceiptLong),
+                        NavigationDrawerItemData("Audit Selisih Kas", "audit_kas", Icons.Default.FactCheck),
                         NavigationDrawerItemData("Master Data", "master_data", Icons.Default.Storage),
                         NavigationDrawerItemData("Backup Data", "backup", Icons.Default.Backup),
                         NavigationDrawerItemData("Profil", "profil", Icons.Default.AccountCircle),
@@ -571,6 +577,7 @@ fun MainAppScreen(
                                 Text(
                                     text = when {
                                         activeDrawerScreen == "order_nota" -> "Order Nota"
+                                        activeDrawerScreen == "audit_kas" -> "Audit Selisih Kas"
                                         activeDrawerScreen == "master_data" -> "Master Data"
                                         activeDrawerScreen == "backup" -> "Backup Data"
                                         activeDrawerScreen == "profil" -> "Profil Administrator"
@@ -736,7 +743,8 @@ fun MainAppScreen(
                 ) {
                     if (activeDrawerScreen != null) {
                         when (activeDrawerScreen) {
-                            "order_nota" -> OrderNotaScreen(viewModel = viewModel, orders = orders, accounts = accounts)
+                            "order_nota" -> OrdersTab(orders = orders, viewModel = viewModel)
+                            "audit_kas" -> AuditSelisihKasScreen(viewModel = viewModel, summary = summary, accounts = accounts)
                             "master_data" -> MasterDataTab(viewModel)
                             "backup" -> BackupRestoreTab(viewModel)
                             "profil" -> ProfileScreen(viewModel = viewModel, onOpenLogin = onOpenLogin)
@@ -744,8 +752,8 @@ fun MainAppScreen(
                         }
                     } else {
                         when (selectedTab) {
-                            0 -> DashboardTab(viewModel, summary, orders, mutations, accounts, userProfile, onNavigateToOrderNota = { activeDrawerScreen = "order_nota" })
-                            1 -> DompetScreen(summary.rows, viewModel)
+                            0 -> DashboardTab(viewModel, summary, orders, mutations, accounts, userProfile, onNavigateToOrderNota = { activeDrawerScreen = "order_nota" }, onNavigateToAuditKas = { activeDrawerScreen = "audit_kas" })
+                            1 -> DompetScreen(summary.rows, viewModel, onNavigateToAuditKas = { activeDrawerScreen = "audit_kas" })
                             2 -> TransaksiTab(viewModel, orders, mutations, accounts)
                             3 -> LaporanTab(viewModel)
                             4 -> RiwayatKasTab(viewModel, orders, accounts)
@@ -991,7 +999,7 @@ fun PendingBayarTab(
                     }
 
                     Text(
-                        text = "ðŸ’¡ Klik tombol 'Bayar & Plotting Sekarang' untuk melunasi nota. Dana akan otomatis dialirkan ke masing-masing dompet alokasi kas (Kertas, Tinta, Pengemasan, Operasional, Laba Bersih).",
+                        text = "[Info] Klik tombol 'Bayar & Plotting Sekarang' untuk melunasi nota. Dana akan otomatis dialirkan ke masing-masing dompet alokasi kas (Kertas, Tinta, Pengemasan, Operasional, Laba Bersih).",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant
                     )
@@ -1248,7 +1256,7 @@ fun PendingBayarTab(
                                     }
                                 }
                                 Text(
-                                    "âœ¨ Dana akan otomatis dialirkan ke pos kas (Kertas, Tinta, Pengemasan, Operasional, dan Laba Bersih).",
+                                    "* Dana akan otomatis dialirkan ke pos kas (Kertas, Tinta, Pengemasan, Operasional, dan Laba Bersih).",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colorScheme.onSurfaceVariant
                                 )
@@ -1301,7 +1309,7 @@ fun PendingBayarTab(
                                     color = colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "ðŸ“… Tanggal Order: ${order.tanggalOrder}",
+                                    text = "[Kalender] Tanggal Order: ${order.tanggalOrder}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colorScheme.onSurfaceVariant
                                 )
@@ -1362,9 +1370,9 @@ fun PendingBayarTab(
                                     .padding(8.dp),
                                 horizontalArrangement = Arrangement.SpaceAround
                             ) {
-                                Text("ðŸ“¦ Kertas: ${formatRupiah(alokasiKertasEst)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
-                                Text("ðŸ’§ Tinta: ${formatRupiah(alokasiTintaEst)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
-                                Text("âœ¨ Laba: ${formatRupiah(if (alokasiLabaEst > 0) alokasiLabaEst else 0.0)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                Text("[Paket] Kertas: ${formatRupiah(alokasiKertasEst)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                                Text(" Tinta: ${formatRupiah(alokasiTintaEst)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                                Text("* Laba: ${formatRupiah(if (alokasiLabaEst > 0) alokasiLabaEst else 0.0)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                             }
                         }
 
@@ -2206,7 +2214,8 @@ fun DashboardTab(
     mutations: List<MutasiManualKeluarMasuk>,
     accounts: List<MasterAkunSaldo>,
     userProfile: UserProfile,
-    onNavigateToOrderNota: () -> Unit = {}
+    onNavigateToOrderNota: () -> Unit = {},
+    onNavigateToAuditKas: () -> Unit = {}
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val chartFilter by viewModel.customerChartFilter.collectAsStateWithLifecycle()
@@ -2238,12 +2247,43 @@ fun DashboardTab(
                 Column(
                     modifier = Modifier.padding(20.dp)
                 ) {
-                    Text(
-                        text = "TOTAL KAS FISIK RIIL",
-                        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.5.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF554B6E)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "TOTAL KAS FISIK RIIL",
+                            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.5.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF554B6E)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFEDE4FF),
+                            border = BorderStroke(1.dp, Color(0xFFD3C5EE)),
+                            modifier = Modifier.clickable { onNavigateToAuditKas() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FactCheck,
+                                    contentDescription = null,
+                                    tint = Color(0xFF6A4C93),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Audit Selisih",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6A4C93)
+                                )
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         verticalAlignment = Alignment.Bottom,
@@ -2678,7 +2718,7 @@ fun DashboardTab(
 
                                         Column {
                                             val labelText = if (isTransfer) {
-                                                "$sourceName âž” $targetName"
+                                                "$sourceName -> $targetName"
                                             } else {
                                                 sourceName
                                             }
@@ -4224,12 +4264,12 @@ fun QuickMutationDialog(
         }
     )
 }
-}
 
 @Composable
 fun DompetScreen(
     rows: List<AccountDashboardRow>,
-    viewModel: FinanceViewModel
+    viewModel: FinanceViewModel,
+    onNavigateToAuditKas: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -4238,7 +4278,7 @@ fun DompetScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            WalletEnvelopesSection(rows = rows, viewModel = viewModel)
+            WalletEnvelopesSection(rows = rows, viewModel = viewModel, onNavigateToAuditKas = onNavigateToAuditKas)
         }
     }
 }
@@ -4246,7 +4286,8 @@ fun DompetScreen(
 @Composable
 fun WalletEnvelopesSection(
     rows: List<AccountDashboardRow>,
-    viewModel: FinanceViewModel
+    viewModel: FinanceViewModel,
+    onNavigateToAuditKas: () -> Unit = {}
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val allAccounts by viewModel.allAccounts.collectAsStateWithLifecycle(emptyList())
@@ -4371,7 +4412,7 @@ fun WalletEnvelopesSection(
                                             color = colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "Alokasi: ${formatRupiah(row.saldoTerplotting)} â€¢ Mutasi: ${if (row.mutasiPenyesuain >= 0) "+" else ""}${formatRupiah(row.mutasiPenyesuain)}",
+                                            text = "Alokasi: ${formatRupiah(row.saldoTerplotting)} * Mutasi: ${if (row.mutasiPenyesuain >= 0) "+" else ""}${formatRupiah(row.mutasiPenyesuain)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                         )
@@ -6264,7 +6305,7 @@ fun MutationHistoryCard(
 
                     Column {
                         val displayText = if (isTransfer) {
-                            "${accountName.uppercase().replace("DOMPET ", "")} âž” ${targetAccountName?.uppercase()?.replace("DOMPET ", "")}"
+                            "${accountName.uppercase().replace("DOMPET ", "")} -> ${targetAccountName?.uppercase()?.replace("DOMPET ", "")}"
                         } else {
                             accountName.uppercase().replace("DOMPET ", "")
                         }
@@ -6276,7 +6317,7 @@ fun MutationHistoryCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "${mutation.tanggalMutasi} â€¢ ${mutation.waktuMutasi}",
+                            text = "${mutation.tanggalMutasi} * ${mutation.waktuMutasi}",
                             style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.outline
                         )
@@ -6761,7 +6802,6 @@ fun EditMutationDialog(
             }
         }
     )
-}
 }
 
 // ==========================================
@@ -7398,11 +7438,11 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                                                                 var infoText = ""
                                                                 if (!pelanggan.instansi.isNullOrBlank()) infoText += pelanggan.instansi
                                                                 if (!pelanggan.alamatInstansi.isNullOrBlank()) {
-                                                                    if (infoText.isNotEmpty()) infoText += " â€¢ "
+                                                                    if (infoText.isNotEmpty()) infoText += " * "
                                                                     infoText += pelanggan.alamatInstansi
                                                                 }
                                                                 if (!pelanggan.npwp.isNullOrBlank()) {
-                                                                    if (infoText.isNotEmpty()) infoText += " â€¢ "
+                                                                    if (infoText.isNotEmpty()) infoText += " * "
                                                                     infoText += "NPWP: ${pelanggan.npwp}"
                                                                 }
                                                                 Text(
@@ -8305,7 +8345,7 @@ fun DetailLedgerDialog(
                                                 color = Color(0xFF1E192B)
                                             )
                                             Text(
-                                                text = "${order.tanggalOrder} â€¢ ${order.qtyOrder} ${order.satuan} â€¢ ${formatRupiah(order.qtyOrder.toDouble() * order.hargaSatuan)}",
+                                                text = "${order.tanggalOrder} * ${order.qtyOrder} ${order.satuan} * ${formatRupiah(order.qtyOrder.toDouble() * order.hargaSatuan)}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = FontWeight.Medium,
                                                 color = Color(0xFF5A5270)
@@ -8824,13 +8864,13 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                 ) {
         item {
             Text(
-                text = "Laporan Pembukuan (2020â€“2026)",
+                text = "Laporan Pembukuan (2020-2026)",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = colorScheme.onBackground
             )
             Text(
-                text = "Pantau dan ekspor laporan transaksi terplotting & penyesuaian mutasi kas riil periode 2020â€“2026 sesuai rentang kalender pilihan Anda.",
+                text = "Pantau dan ekspor laporan transaksi terplotting & penyesuaian mutasi kas riil periode 2020-2026 sesuai rentang kalender pilihan Anda.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
@@ -8853,7 +8893,7 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     ) {
                         Icon(Icons.Default.DateRange, contentDescription = null, tint = colorScheme.primary)
                         Text(
-                            text = "Filter Rentang Kalender (2020â€“2026)",
+                            text = "Filter Rentang Kalender (2020-2026)",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.primary
@@ -8962,7 +9002,7 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                         )
                         // Preset 3: Semua (2020-2026)
                         FilterPresetChip(
-                            text = "Semua (2020â€“2026)",
+                            text = "Semua (2020-2026)",
                             onClick = {
                                 val s = "2020-01-01"
                                 val e = "2026-12-31"
@@ -9691,8 +9731,8 @@ fun exportToExcel(
     val fileName = "Laporan_Pembukuan_${startDate}_to_${endDate}.xlsx"
     val uri = saveExportedFile(context, fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") { outputStream ->
         val writer = OutputStreamWriter(outputStream, "UTF-8")
-        writer.write("LAPORAN PEMBUKUAN PGD ORDER (2020â€“2026)\n")
-        writer.write("Rentang Tanggal:\t$startDate s.d $endDate (Periode Aktif 2020â€“2026)\n\n")
+        writer.write("LAPORAN PEMBUKUAN PGD ORDER (2020-2026)\n")
+        writer.write("Rentang Tanggal:\t$startDate s.d $endDate (Periode Aktif 2020-2026)\n\n")
         writer.write("REKAPITULASI DATA PERFORMA\n")
         writer.write("Total Unit Terproduksi:\t$totalUnits pcs\n")
         writer.write("Total Omzet:\t${formatRupiah(totalOmzet)}\n")
@@ -9757,19 +9797,19 @@ fun exportToPdf(
         var canvas = page.canvas
 
         var y = 40f
-        canvas.drawText("LAPORAN PEMBUKUAN PGD ORDER (2020â€“2026)", 40f, y, titlePaint)
+        canvas.drawText("LAPORAN PEMBUKUAN PGD ORDER (2020-2026)", 40f, y, titlePaint)
         y += 20f
-        canvas.drawText("Rentang Tanggal: $startDate s.d $endDate (Periode Aktif 2020â€“2026)", 40f, y, subTitlePaint)
+        canvas.drawText("Rentang Tanggal: $startDate s.d $endDate (Periode Aktif 2020-2026)", 40f, y, subTitlePaint)
         y += 30f
 
         // Rekapitulasi Section
-        canvas.drawText("REKAPITULASI PERFORMA (2020â€“2026)", 40f, y, headerPaint)
+        canvas.drawText("REKAPITULASI PERFORMA (2020-2026)", 40f, y, headerPaint)
         y += 15f
-        canvas.drawText("â€¢ Total Unit Terproduksi: $totalUnits pcs", 50f, y, bodyPaint)
+        canvas.drawText("* Total Unit Terproduksi: $totalUnits pcs", 50f, y, bodyPaint)
         y += 15f
-        canvas.drawText("â€¢ Total Omzet: ${formatRupiah(totalOmzet)}", 50f, y, bodyPaint)
+        canvas.drawText("* Total Omzet: ${formatRupiah(totalOmzet)}", 50f, y, bodyPaint)
         y += 15f
-        canvas.drawText("â€¢ Total Pengeluaran Mutasi: ${formatRupiah(totalMutationOut)}", 50f, y, bodyPaint)
+        canvas.drawText("* Total Pengeluaran Mutasi: ${formatRupiah(totalMutationOut)}", 50f, y, bodyPaint)
         y += 35f
 
         // Table Title
@@ -10163,141 +10203,8 @@ fun BackupRestoreTab(viewModel: FinanceViewModel) {
                 modifier = Modifier
                     .weight(1f)
                     .height(52.dp)
-                    .testTag("btn_create_backup"),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF6A4C93),
-                    contentColor = Color.White
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CloudUpload,
-                    contentDescription = "Buat Cadangan Baru",
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Cadangkan Baru",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            OutlinedButton(
-                onClick = {
-                    openDocumentLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .testTag("btn_restore_data"),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.5.dp, Color(0xFF6A4C93)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color(0xFFF3EEFA),
-                    contentColor = Color(0xFF6A4C93)
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CloudDownload,
-                    contentDescription = "Pulihkan Data",
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Pulihkan Data",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        // Section Title
-        Text(
-            text = "Riwayat Cadangan Lokal",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF3B2369),
-            modifier = Modifier.padding(top = 4.dp)
-        )
-
-        // Backups List
-        if (backupsList.isEmpty()) {
-            Card(
-                modifier = Modifier
-               xœì}kwÛ6¶è÷þ
-T·“‘W~Ånê3ndË‰'~h,¥½g­»–,Ñ+ŠÔá#Ž'“µÎo¹?íþ’»7 ’ 	‚ %9iÇøXÞØØï½A”Îí8ôãoö$œ¶7¾!ŠÒy°ìûiØÞ¹ÛØ,T¦ta‘#ríEîÄš{¾kùCü²½»Ý™,MÆžãù´9¦þäÄº£‘1|8f¿´•³{nHmèœUÂÖøç·©Z…ŠQo=ba»ûcúÞÌjïÀ7yWíí§§ýW'ÝÓ7²±A>ºëyÕóœ{ûÎf#]ˆ?ãMÚÿ´ÚŠ©ÅË³Ü°ëØ÷îþ€æÉßcøÇò‹«TÌ,'š»êéa™z¾ýOÜNG7ÜÛ¤–ó¨ž3––ÚcèÉ÷©{oÅ}¥Ÿ:Á‚Ž­Iï±ýZº[ÐÉÄvïÛ»¯°­²iÙ&`)=$Í˜ÚúX:ãþAéŒ2•ÇŽ½h+.ÇkoÐÁ-Ïî}ì ‚éé^¿ÚÝÐì&–&0Ý¶b9ƒÎõ{‹ÅžÓ{ëWk²‹m‚Ž¸ñcÇ‹&Wwwú5Hë8±‚±o/BÛs¡³Ö¥Gz°7Ñ¢UÝƒ
-¶Ø1îíê2.¡Í¶/=ƒî«ãŸö6:coñØ¦ÎbJáçíÎÁþHËý\úËÈúê·:„¸%=.>¡J|û>ÒŒáƒ{O]âx3êt*¶*Dæ@Ã¦Îh
-W¸>.¼{Ÿ.¦[oòxaMìh®ïèNì7F5 ·ÓäCÇ¤íXÆïl¯÷÷_õú§„{À šŽâ¿+¡\ùKñ(²ß¤Ÿ>Ë	¬ÜU9§ÿ|,CÁ¦giº\/ïlP™êöí[vå‚s;¡û’üð³šE/‡Ûº¨×dG’º¡„#zßnñéÞà4o¾û„ÿu\:·>·4Ð¤aiv*hX3Ö&m]ƒÅ‰‹f6õXžò~,Çú@Ú-,¬ÿØžð¯ûRíFdûÚ{XÙ®?¬~Ì{ì¼ª&ÉmÓÚ_E7…EâÎJïîïnÏ
-,ËmLÂ+·‹ŠrêðN¾¬rg°˜ìNŠÙv+™´ªMÂRÉFÆ¥	\Æ…ó#¯ªgœiTÊ^îš±—IGK°™qY†ÝŒ‹Éq`1c?ã¢cC9i¶B,jfôïÃ«Ksv4.e\¥y¥Œí®9 U×*çMãR%rVÍ9E)+‘j¶Y.‚…N8ó#XÓ,—2ºç9“:°šg¥÷z»{?Õ0úñXäivÌ[y€öïïAðâWâc§ï ¾
-ì`Ep‰…‘B¿­ª)ª¨Ðˆ$Æ¥)ª`ó¥Ù4ÛNÃ{ƒ¥ÞÝÁ‹ ß}6Ø¦ÎçÏiØ>÷`†Vçýp“´þÒÙ¹kmò;†HêÝíÆgò®Wab©¼o½µœá6¦^ÇewnhÍíz÷K©kÜ‹yMc%.Ë0*qK-~%iËø–cÛ;cXt¡äX”ú[]1¯ÙøN0xŸ ´ž²+Z5!im ÿT ZÍ>èk|þfy9¦²6ø°¬I› gä[{Qšr¾ž{ìØãLêá×y×V ,°ubûÀ;6Ég3°)W¢šéÂŸž·ë]–¹DŽ=Q÷+áì‹êº²bÂÙ¯ì‚)õ-.¶Ùþ~9°ñç¼!®{Y°ëÑ{ûê#»Ë±BëOãø2—…µ·tË@ÚÉÞîéîéWiÍ~UÿRÃ0ôÿ }áÛ€s#w‘[†	u'¾gO:ât:Ç1¢¼M*’´af¡ÿ(Üê0Ø‡-ý~ Ûë°QÒ>:ô6ðœ(´4œndF¾íÄ<>ÂD|+™6øÞ{‡to…ï}xYÖwfý1zÏ|	"¡ø¾üÕ ù-0¨·¢ÓäáOÉÙiÚlFéL“9ž±ÿÚê¯;ÝãÑÙÕåÍ°y²Ñ¡‹…ó˜»¨ÀNã¾µð7à×ð^lýxn+Sk…ý¡OË†éÿïÑu÷f8ºîw/6qK³J'“S‡ÞeÍOÏ»onÞ\w/G7ÐÃÉÍûë³›Aÿúâl8„Ùoä KÚñNR?ìŽCûƒ>–u?ö- Äã©ç–ßæ;¹™Ðr,lÅ-!>}&°ã)ièõ?Ž-†,dgu ¶ÝpÂ±Ž|à%³J<…{ Óy4;s:³˜•ð­7ôNunÍoÅ,n-FƒCòÝ'«ã ò pÂäÂ
- œÏ­MuÇçýË7£·7Ã·W×£N0‰`#½[[äÈ¸`íã«‹ÁÕeÿrtH×W§gç}Òýµ;ê^×ìê¼ó°VÎ‡ÃÅy=X¯Ò»ŸÜu€—¸°8¨¾qH¸Bå±ñ¾F¾«¸ù;TÔõìpN§éÅcçŠßVÃ½íþ=
-€Œ½‰ÕCa;ýÈÒ › +à®=–Öñ–{æÂÝ€™ZtÞF¸ÿ¥¡a„Wü*o"ÎÎpÂFyƒMâF ÎÆ‹R>®yN?žØs˜ñ«ímé–5¤ó…c¡Ëª.“¦ˆ Û¢ßŽ…Ì H¶²M~Ž»þ×¿ˆT÷-W•TÎÿL¥ïÈnÉ*øú¯_8µƒNnµòÇÜ„¾ugù>‹Ü;û>¬Ã?w®ßônööK&zËêB£/ 	™M’àürß	¬øMvÂÔcúZ(è?^Ea:¹´¾.XÍ|á¦i'{Â?s½Mçïƒþ›Mòz“u›#Kx»qî„^2ª4RkBCzÈjoý¾°îÿã–!ƒÍyI8^èX..täñkßN{ÞŒk\^ÝüvÝ±ôhê{ô6å°Ä%
-m§sîÝw¬vˆ9ÒX†“ §¶ú¾¬¥ÀT0*_	=1$Ô‘TtlŸ9t výOÜ&/Àa¾}wé¡>ç  |ñõ!yŸ~àT¹¾Cr²`×Ø·1x˜°‡²²2^ î=ScÇ¨+hÉ¤ß¤ú®ÐÌ1åôqËÜ7ü&©Ç¦Ã¼o!•Â)­¦CÙ*Oo’â×#à)ä“°ïˆ¢ñˆqÀzŒ{óyñBÑÑ±ƒK/ì9Ôµ7
-¸FÙ7¶b¬Að›NÛôµ6µ©[8–{(ñg²»½­h²´G.¸m>}à@{V2£è6`ÀÝ½ƒ³B'~Ôì<;
-q³Äà¸ Œ”ÜŒ“þi÷ýùHÝ‘
-Õ¤wô–_±íM>“EŠýTÞ6¹$÷$ÓCVbàd™šùï„´<Œü;ä±’z?%œ<P)Yò•½SË-ÃüBZü§ë£5ôñÁjú–„¾ííƒîÁö†²Ó¼åê÷^íïmÿ¤®g»Ôç[ìì¿ÞÞ;Q·¸¥Àæêôvwº¯Õõ–}nJýÝ½ãl¶ýPKBÈéÎ©ÿx»h¥§•n±$ÒÎ3"m
-Kò¬65]Çëø[˜¡‹Õ ¢¸ÿþüöˆtÙUa”¨\!’0rŸ°füS™c½´S9Ç©ô/¤Ì:'sÛeRªF%":¢}3+9#9´: RúL#æEÍÎ±ïi¼M*A@ÙR…§Ž©qéî¸bÇa"–ƒÊ&¬vmýwd˜Õ‹l¤õXt©pÂDb£¦IÇ¾w0<
-"•oqNÏ‡/%‰)‚ã[Çl;ê…¸¨‰CÎ¹*
-Ðy$ÐxéEN•Žßßù°‹Úæ2ùÈvÐ@†=ê`m')EÉûˆÁ÷Ú–mÉ6°”mc2“›.‚ß€º–3´BäÅ‹Î2E5$%ªdùüRü·JèŸv!:wåâœËUàYu7‚¨6f*{³™´¨¬.tÖÉ>©k•ê¥Oõ=Ùîìï+¼Ô²ß(ÁµÕPÃãë~ÿ þå{¡ˆ"Ý“‹³Ë³áèº;ºª«Ž*‘Ô†cß²ÄQ|°­‡Dý‡ä”ß¨_ãoøvyîÈø FÚî!ioà±¿wmÜ×OŸ3R™|ÀQ§wd¨sàœ»Á0±e”sûÎ?ŽÛ1$¼Aò“íF|iØÚŸSÛ)Î…}mØÍŠEÍ´š¤0åpì1–>–53?ÀDDŸ$T
-õ©¸(µx×ÂXyâÑ³^Ý•ÕûœÒ{†Ö êTtŸÔJ;,ÜnkÒMÏÒEÈ¨K»
-©b:çeëà
-•Ša;1…ÕK±ƒ!ý`MäÎ‹½ÜQ@”ÙVÐéè#Ì‹1Z†íÓ›öxfùç4rø|	zâ¯N=?6\[™í"€ú £ì©r,~:o¬Pð0íD†Qªª‘u{LÀðí2¾¿¸òœÖ™ON†~`¨p9í;X „µsv¥¢f©ò†«*uêw…•Ë  q[3^€ðWF@S™§JÚa‹Ëe,Û”6PÜ˜TR+mæaÐSZ¯Ô@Ãåg”¦¦4€?&6|XÁ·dd¡ÑfhÏð°YÑŒ€üùh»3`Ùà§Nk“TØhòE+»hçš“øì¸1ôÐ!hÂìKÜ/•ÜÓù-Ü@  àsTC€ªÕÛ^e7NI;ßSÛrDty…ˆN'¸zöK•‹2»ó ½5áñ_1s¨`ëRV(r+Ûx|ø_)Ð>W2öŠ†‰ŠDÕ6àJ,Åx&Í8úQíÍP³Ç=7X+Uhf•/¬FKcÄ²ƒu¢/SÇ] g‡¸&æÑÈ[‹b,†ß¥8[²×Ds¹Ò¨Ó$¶’#ë£ o¦l~ª°J]†ˆGËÊ0ÊB¤¤Xjæ€(‡ðêÐX]ôKWkÓÅ\^µ ³ª,u`YtTFñ/|ÙñÌdóP¹v*áWQ÷"sÂåÊÁƒ"Ÿ‘òµåÕe…¨‚ôV5|Ï¼ir4¾D}£üZaESYÊ:Êm¦&Â™Û‰_¿N¬mª¢’„—?Öð‘KL8%kÔ{ÔÁ)s¼ûŽ)mÞœ+¼Æ-s_¥ó|h‡ŽuNý{Í~5‹Æ«h§;ÌS@Õºk%2(ÙÝ‚½Èd~y3G>¿Å¾.æW8_Ž¨c’S_Hw:#>V5¤äOa'ö½˜N0l!«
-éSƒÀ ·ÉëË¥¡Ë©“ÒtÙeD0ÆõðÍAuÄJSn”ŠT*¹'k¢Ê¡ÙJãT\ºÀ¨áñÔ^èaLò-ÖÖÃ¢–Ò2ªÕÊ>Š¢a«º‘© ‡¥üY<ó¤f÷;&¾ o"—¢5ð­À
-	_g«Ò—ßþ¥"no0vi«<…ð³©Ñþ–ëpM².•;/-&rÔîœÀ¤ÉÕ"°‰dZ	Ÿc%ŸÙrƒ-K¸ê’ÄuXÖÇqC­Ó«Ñ•Ò 1VÖ äôîÔÄÈjŽ~v`QZ°öHœq~iEA£Cÿ•RÙ,«˜¤½ªÄ(:FÉ€îV_÷r¶®œ0u²å`ùyar˜Äï`ØräP”»îÑ=ôÌ`Ä€§NB Å´l¢, 6îq|DÌRth<°Óæù»ª;âÄüÂrï™JˆÎÔÕÞ£3Ü}®½Nõ¡F,0CM©iIˆM•ò7V~š‡ÉAa
-SIlQhqÜï«¹˜'I<•&/cK¼YÀ¤o„Óæ’x¥1^P°cÝÉd0xé: !.€I3–l× z+¯Àëê>8ôlÇFgÿ÷îý=r®k´†¼¡À9i×U–œ’ÝñF‰NKY”Øô½ÒˆðYrÖZ0Ú‡ËÐ÷ä®Ö§áÕÉ/VMÇ…VÖŒ¬¦ÚÕ]ù¾å¼Và8[ÌƒF³]
-Ç%l†Qñ³0ÊÇ¢©Z
-_%l5òfžA‹Ä=	Û¼³"hUÝNx$a«êÒß¡rªF±3¶âþGÔQ%G åšq©Ÿ2§¶ÊH€N'¤ Cìm`š>O´1Æo“K·eI+ãÂýN†BšWê€Q]jû9µ=Vë°éhéÐÕ¬Oõ„<LFEQ¹¸ÔÑ3`1¼ÎéØG$•ZŒ2	4ÍyS'7«ŸÐï1œz¬ ÿ7¸Š~³ÍÈ(J¸PÃ‚itù'½>žZãYCµ	cê74Ì\\Tñª²"šúg@Tß[<#*Ý0ÏˆêQýq•þ›Jm0›’+¤¶“z~?k‚ÿØš`µð½œ&øì¤9:u‡dÐ¿|Ó?¿:ïþÛë€žqåÛt3ªá>â¹¿bƒã)žn%Ëzgc
-"muSR¥!y›N	“„A€öQ;©×n-Øñ©çðë÷‚*nozH_²EzÑÄ&C8/ðô}>MŠóÜÄþ(˜»WG½rvHýá"óRÚ,Ý®$¸³àÚYíY‘÷xÔ¹ø¸÷Žu.<žòžÕqYÝ52rªªw‰äøƒ/q…þyu¾EF|"Ë\ w–ã9”ÄšrnÝÚSÒ³§³¯ï…ñz—ºF<kÛÄç»$cÎ•#¥|·¯O÷ûUù¼+ý²þÀæFÃ÷›¾@ªV•TÃ3k¯C!³ÞnÿÇ“½Ý%M(XVaFÁbž	9æUO@´T‘<läû3Ž!3‹›_¾5ÌG¸òüÅk¶ÓÛïïnf7¬2¥Tv²b‹ª/UÙOM•5i0e 8ÎÈ{;.¼¸ãRÓ›;±©Ww¶sïî¸è4e^J©K\JcŸD.ƒËOzñ];IïÚ‰t×¾­ù„åKñ+âA‡ýjÇ‰”µ	¢Û¹ò6Ü¦Þðù¯Ýr#ºŽ*(¨ž·†”/nYnþ˜àðìbÐ½$ƒþõû^÷-þÅ¼Î*ró‡Kj ñr~ciÿ·I´>‹Ò÷öýðýð\]Ÿô¯ÉåÕ¨KÚïºçïÞŸ£Ü¾·gCøãl£nèþÕ"<sÛýØäY¨ïÓ^waŽ…&´_z!­ä­‚C‚¯üýmäS7 ³Àf}]Ð šýÌ«QžY#®?ÁŒº³ÈRgâý¼D’¶4>|DoÕAÑg,ñ(‹‹Þu¨ÛB{úŽ:³Èaðaéù>l’Cr-^ÆX…µÜœ‡[B¥Ä&‘Ò\?žîŸKÈêKtž£\\o¬Ò&yå^a0ÜdmCÅh5ÚŒ#?ðt÷MŠFj„˜î¦!¦,p/€0ÏßB€[ÚûÖ™¿ó½9ÁìHñ5ñƒo‹á#B]|¹€@ºöÒ&¾KEñz±ø‡w¬z³øå:`…$®ñù—ÎhOH]è“uüÒ	½/ºÅÔ˜>sgû ³Ìj<ÖÖÍBT¨œÄî¾4‡……:t°Úf$Mt³‘kUNio{[šÓžê`šMç7¬­›	«@¶ÈuÈ•MÝv³Öü	lúíäç3ÚOÊré=…sþOlÄÚÖH{n™z5¦÷c2=ôÝòí™ñÔÎy}Ý¬’*5&´›LhNYÒk¤xÆ“ºHÛ.Ýì¤º5O4FŒ|»¨Ÿx;pÚ6uïÍ0ÛäTÏ …DÂE „‡âª“]èl{{Ss²û
-¿ÚHk‚f
-y]âPä?iAÏPZ™ô0OÔê'ÛEæš×êg÷U~:ñõ¬ÓÏ!C¾ßßNÜÞÈ¬6sÕR¼±Å¡ÒkÓx˜ìÍ+‘½‡)Þ§t¨¢¹ÙhÂÚ„é™ƒdÀÌ#…dUÎôÉsþüÞ/?·yV9G:ò:ú¼9©ŠâÞ
-GÞ„>ŠÜÊ™=A™÷pñš™|Ž2¿›
-èÍ î‡lê¶hÆpDöêêpÞRÿžþ=&¼æÀSl84=Óô÷hîÐéÀaÉXê6¶ƒóÈ,§mÂ2FÊ»ôèŽß8Þ-MÒéÕË±@Š¹±Åz‰úS(MçöÔÙ1’¶B¢Ê$Rãò—ìø•»(G¼FÇž°o’jñmˆŸ³•ò W–¾Oêf`3®	t,¾GI	(¹OoÂ¿îØA•+ ’{áÈ•’®ò`vD2¸‡·‘*¥“P€·²q¼ÀZšÞŠ0oDæ—”äªö%†Ý£dG f¢€³=ø‹e¸£¬‹’,‘m¡®`ÿ±Xé“uRl¡éO' |{÷YEçâï’'á'	  2sZ?¨ns;é+ƒ=…VR­lÈsþ8•	OsqpÕ×ÞCœ§=tì9y–n]Ážd¢Ž¬RA–DÌ¿RFÌ[KïT*œ „¬Ê³ ”4_©Õ{É÷Šö°úO¦‡–Ój2¡ƒÞê3ÔöÛ-¡‚	lÆ¦¶6sIN©ƒ!t¡ÊŒw RÓº¹¶Æ–½Ï=÷>ç–ù„3ŽÝkÏ`G?ZŒÑÇ¿6I›% ÙdiF•Î¶¥¶ìñ~
-­JŸd­•ÈÀ£3VŠïé_b-)¾Âx(ÃoÞÉS¡?á+¼[PLu©ŸØx†d±H½±ÕØ»ÔS@Ûä…ú2Å¾Öt½ªèÖ%®®É°T¿DgšŽ7.J«¿ezÃ·|ë€,ÉÂÁL§YÌcÔ×UAÙåNÅûúÐÉåm-›“±«ä·(ggá›S3UÌÊ^Ž­ç+:ÇŠC3~ž¾ñ“ô+ÌúDAi¹KÐ¼ê†½Q>É‚ÌQ·‡öÓ«ë’19]Þ¸EªÐN•Q.M²×irÕ³jjvê ÏN½þ®×¸ß9aË —«Â=?_ÔîúùÒ8ô£fŒ9k“˜ÈqÁ7øàÃÍ-u1`MB@ê‡”þ
-I5†×Yê5ŽûrÑTÎU¿Ï&~bFþoXš–\nóv¦Árr1áX˜CÏ
-,«‚•ˆË
-Ý÷°˜†'Oý9š­K-pÇîã¢§FFÝ˜n&–zÏÇ-Rµhæ‹ÃRóˆ²"xÓr”P7«_¾”;wš=<óšœì×8<,æ®Ÿri¡öàáeäyò¿¾û”%¶º'wÊJs#U1ËjÀ«Ê¸’
-Á¨Ö æ§¥áa¾¿¥SâÛîØs²çéP'"A6ü|aù·ÔlÔ#.(™DÇžÑÀî48æU$9)+MÎ¥ _ª^…ÑóÚÕÑ¬æµðÌMR'É¥nÜv\
-V‹ÊhÛ|)Ú*2aÊ%gÀ¨ÙZiH¨ÙGÑŒQ³•ý¡Ff`Q‡ˆóÈ¦EÁqzkÓà1£Æ¦Y›]ƒÐnm¹ÏƒÀ-¬=&3e3óË¥B8¬—Éc¥¾”&9 îõû§ÝŠtR”«ôê¤{úcU_•B]¹¢fíÁF¹±|‰Ü†UYGåÒ4‚)6ÚÔ‹_:è¾:þiO¿´·kwT‹c­ÇÜÄNïÇcï_¼ bÆ4Ö	AÂ²Æ¶Ì´×ÛÝ;øÉP¸[ã^­ ¢ìMž˜™DŸ·6lá]"ˆk;Ô&Û2´D¢^èÍihŒµåzsÛeÞ³$ˆn`öjùR/¨Ãe®ƒ»,îüþþ«ÞAU;ÿTt.IMr-Óy'\I7ÞóvÏ€Ë·í íë$†’Èe]‰OäÒ,	J^ùñ®ŠÒZŽõ
-Ü]XN?þ±=á_÷¥ÚzSE^tö¹hI±Æ: —åÓu×Y–eTºÏ×?žÆµ<ù[¾ÔV”fÙ¯QTñêà¼j*äR_%Só˜8ÉÂŒšŸµ©áV§-Ôd†_±¶ÖL„/õ8R•eìIXd¯ €»7]˜'A»eNlÛ†	2#*ÍÆ¯óVcsWm•G£kpeMgtJ.97»ê{`ê•‘/«¿…ŒO~JXX¹ÔO]Ñ#3ðí;¼4 c/HÖC¼4®§1¾Žjù·üà]ò;ˆ8dcÅÐžÐÔ¸çÏè˜Ê(«–O–yT*.
-ÉŽ~ÿ ú8KRåÈek‹»Ã{‹…*÷Ï‰ËWÉxÕdLqR]ù'ìÊÄ™ßøB
-¯\@™ÊS\W
-oMl)¢ÙÚ×‹-„êwä¢7içs^¹^Ho¦‹Å_†‰×K\fÖã­¢ÒcÃP(|—ý¦×	GÞI;—‘Ô®I®«|©ŸûªÐƒQ.¬|1Ãð+€j9(q Î7®¦Yôƒ4[Ä3DWõ°&ˆ6àF|ì…ðY³E¡½‡[äUàžFCm	Ë%ƒ}ñwð¯&Ö¥àŸ®Êô<!ü/ûËÁ}}˜7cÙ–?FÎàÊˆg«ÏŽRÞ»ëxèLB¤ØzÒþËÆª8jÖuøáåE*m:äUÑ3lTb+çX†›Èä&X–›à‰CÐ×ÍC,Æá›ú3QÕÃWÎ’W,ÅSa,Ór²™'ípö×U=|9Þø™T•øŠg“Æ,s½ség–½Ú"cÓ“Ýj1ýç«]ÕÃ×M²ŠŠ–iE¾£eáZÎöT°Í–ñÙU=¬h5ûµ±¿O]Êr§g²•ªÚ=;V=;V}­ŽUÕ6yF©¾®(vIIòmå²É¬FOT×e=j"SÏ3=Þˆç}Z·[¤—jª¶Öe§*+ÉSô‘ÂHû¿ üpqñÃÉÉúõÔb	¦4ÝàÙcêX˜”å9\ÛÃ;r	}j;Ò¬Œ	56±hRˆY1•Òpò¹Ž¿NÜ{no°×kŸ’}ÏÃâC1Ï0BïßÙ4À¤‹ñïŸù˜xeÝ8&BØ×#›ã±sìNÞ
-‘+•'ãÛ§wŸ§'=
-Œ’xÔõ.Á;0£ry|MÐô¢Y´~d‡{¸BL'²¿=	ŽûsÞÉ„äFÙgœTV ÁC—Ð]Ô¢y¹pçŠ73ÇÐ³€ú¾°Á$Ð¶òDåµ;cñÓ¿2õÈ³¯òN‹±Õõü1SNög²M^¼H‡2H×TV*2Î&Clá.Õ›­ƒÀj6WIýEŠÇDví)Ø„g]TUuQO…¤
-É–Ñ²ª2,§d}‡z0,QP¤ÕœÑöú5µ|ÒÏw£ª‡/g\DbsÂA
-„os±Ãlò²òÌ•DÕS ÷OÅ)“¸¬ˆ3’ù­5ðHö3OÄk.áY’¿æíëÅúul[n~Ì5{Xž©ÀWÈ!å.ÀSa­â½ûzP›ÛzPVÒõ(«úùðûd¬¯kÉœÈÓ`,¶7ü	–gœUÕÃå\‡üé˜5¿¥aÿgàU¿ê¬õÂ¿[ü€W™~¨v0–Õ&Ò%é_ücáîÖäÔv`/Ž§öÂ|çƒô‘ñàRrZ Ó×š¸éq	ïGþ¶Ó:÷¶†ãn‡Rc–ã
-¨Í´.¹U[ §ÖxÖÌ*Ã3ìmÔ!²ü	ãÌ¢O
-„ß®
-Å[ZÍÁ°g9Ñœ<	0ÞâPËã·ÏÐ˜öhÆ<ºcrÏž9$ÁƒŽ§_O°ŽlMus_}!Ž vHY@Í1'G"žíÚ,w!ÏpÈðç-\En,Íóƒ`1«5dÀn~cÄü·ÂÃ µ°4ïG2~(­kýPÝ´ÃòkÍq,Žu#`å›Mòüì×>¹îwÏ]ôÉàüj4:»|CzðÝ»“«ß.Éq÷úDÙM…³³P}HŠ&ÚD9‹Zs#¶xÒ[Û­°©&X°¡‰Yjû›½],TÓË¤f1šYXÒ“œÃl‰%Rõö0#2jóî¬±-÷l·Ü×ÙÂw¨«Ö:+ïµãX¯o§¼ël|U½nçåÝC\Š]kû²;™wŽÄõ‘_ªÿžAYe<Ï‰ºƒÐ¤ééú#é¢d{Z˜ôÄ¥8ð|Ÿ¹ËÕËx‡Âß¬AË8ÞíˆÃ@ÍÖ,ªÚÎm«1ÕKPv$åKéT^æ7ø¥´O/ãu¿Ì,ãe:­ÊÉí€žÓ[›ûbÄùƒ4»òU<‡¨ò•ýBŠpøW<¼¶è}Ç5:Eÿ¨€ÉÊ°|•*Öç´¿ü´¿Mˆ¾ÞÍùË¦þMû¾¶¨óÃÈž[Rhð’–õ¼¦€åÏ›ü·‘>‚ÛD¯£…M§m™b×ÐÞ=íÓý¡O—7_Ô9©•¨èÞ&¨åÄþ`ao+­*™¸Sö4=ÈÂÈ” Xqug#ÀÀI·N¼ùÂ
-E¾M|Æ)á7Ië»Oø@îãóVäÚÆè¹a*Fa	—$ånÅHéÅá|¸š›¹9û¼E®£€ÎÄ ì;i¼.ÆÛ´… ²ØÆç¿4ÝD)SN¼—ï
-#Å’ËRC	@Œ">†rV0’”KAŒÆ¾)Œ5ÏŽUÍ~T_!v}:0HŸŽ§äi3ÓÉ&wÿÙ$> 5`Â7È?¯ž‘Y+ˆe=ì –³„Xê°DµvK-6ÎðE/¹¬a?°Ô5v5{¼SP~äµ[¯óÎ2’?´æv³§\—Ë¦(—§xV5f¦ÛßÅ8g¤6}. ËªìBq)Ú‡^u÷zÇ_öU,E¡wÁHHMä²®¶zÉõÂGöˆk™çÈáË]¿'|bML:Ú¼ð]4¦íY~`¯×8o¼µ9^Ã¼ôöK-ÐAÉè‰ÈÙ ñÇÞ=éõÑÓ~¯ß¯y…TÎT?í%—[‘(&wÍ‰?•æ®ö+òÍÕL'Wƒþˆœw{]Òë_ÏÞ’öðlØ­K(ŸüMZ,2¦Õ\æàž»8Ç»¯w_¯â›Äa18?ˆè;n¯ZÃë`«>Á&,NÅñ¼bžæŸJ(¯øÏ¨N¬<UñÖ2§ú•8íàRÙóíV`jƒØœ
-,f0&`KÿÛo«KÅ¹ñ'è+›±à¦¸ß­3…fžÁ3È°·X f–gì"ßÃy@ˆæ‹’ ”
-0É¿´—<¢ôá•1oF½$ÖC¯/£N¥˜>U·¹?æ¾‡Ç‰+‡!rù _6ËäJ¦_±ˆ\Ž~tnEò…"|y§4¹ÓÕ8§egNj™u¯ÌYMîuåNk™=X“óš<ÆœØäî×åÌ¼;¹´m;è9Ôµ7Lå›á.®=]|á»&‘Å†4"“$‘÷âA_Ýo[FÃøVùîr„¸$Ù×Î0¡ÀÿúÃcLJ³•‹ìB‘Â°UÇºµ§dB}›lÁ¥Jè:]púåß„†ªÙÂ¹¬Â°3Áþ§[ze•ÜTYÜ‰Ñ†½ÕMwçƒm= 3b9h1éÔÆkj§™Ë	€©#•0çÂcLž†µf0:¢üZ­c´-œJkÌ7ƒ‘c×Ò1R	º~¥5‚
-2¨T¸–>ç&6BcÁÎ&uCû‘TXaâ.`¿;Û` àõ‰ø	D…ìhf/Âá9î¦ÈO’#˜}sAƒhfìÉs4‘fâ"²ÇÕJŸŒE¢†¤µ6¯crŽ¹jîí]CÆ9à áu;ö£Ëp˜­Ya«NÜL–¯–>™w‘ápU.èuT,<?W+"9?ž‰Ç¬‘kÀóÄ>$J,I¬Ù5Þà>ÂÏPöe&¥!”5bØÉ¶eÄkÖOÇ™EÜŠèÜº|ŽíÀ¨ð©Ö½DMïÏj.Î×qgšÞIñç¿¬T1y«zô\F`ƒÊôIíŠ«©R†B³j%­H²0¢·Ðb‡ÙY€,LŸ\Ûô‘†pónñ£oá]ÖkÊõ ÐÄÊ^×ºÞ™ò´
-ûf¶j)08ºÛ"‹ã‹on™|Yå‹YUÚºŠsgQ:Æ?áÐ‡ZüNf¿Òe5T%wg{¨ßDfa÷ÛÊìÈ^W÷QË„¡Û|Öø–ú‘¨Óñ)åè–N©ã«ïVªo—X·¢ŽUî‰¬IyY€[Ø¶Co"·íÂŒpkbšh¸z¤Ürv½­t­xß­àcö–¹èÛOöXò–Vu´âjÞìz}§¹ÉO¸hèhü.~©ü-kÊiÌˆ”¹öfNï­_ç0 ÏÒ©3÷Î«ã@PFÏji?ÕMËå‘FY¡Ì×,UÎ1¨Ü2 î¥@ô3š}$gÕ~%+J”óo ¦BæÕ#ÕÆïÿýÏÿ%]–0i1¡üð	“FÿðG/÷J‹Xæ%‘ û:$×²¿½½M¶È{nÞ±¤ØÙŠ×a# [½ô À€>(p„WË‡ÜÀ!lkHæ½=‹B›,Òz"·Ôz3oaoyi;ÍAnó¶ý¿lfÂËÈðEœbþ–Ÿ¼ÝÿËFgU/(Öôi_…“^óÜTkñSÇšö­íØ,m‡Úd»|­Ð`˜yó…çZ<ÏØ„.@"žØÌrÍû&¿Û3
-ÄdBgðÃ}äRLMÖžÛuÜGÊã5¹e[‹÷gŸP—róg2Ð#m1Æ6a½Mà¼í)þµ°ÜhŠ©ÎâèÂÔþJJ3@vq K"¢sØznèmJ#ïþöü¯†™ëþJ$€ÎÁùpÖ—W—Ýw£³SÒ¾:=Ý  J>"¨©F0E—Ì¦Q’×ÇlŸˆØîQ‘q€ÄÏ(‹ùHØnÊˆA\·&z2<Pï`ÿ»‚›î×U¹Šê…jÎEh¿ö4š›âL²ß”ª÷ñµ—nì>û­û_Ýô‡ÝËî% æ¨[¨.Ô‡ÈŒè­úþqtb‰VAä±Zü§ºbbk€šÉßêªž‹ê²Äž~*ÔÎnbºUü¯ÏßÀþç1bî€Þ:Ö7w‘«\9_à!cþ¦°€ÿÌç/PT¼@ŽÂïÎ"wH‰'*%k;$ÜmÄú5»Zi=‡¤­±É{×¿‰å<–|*åQ÷UúMÔ÷IQ<ýGdùäö‘øðæ¡'ŸÈ<
-q70ƒ·uu×nµâì¯¬³*ðœÀí†Ö<bx"ð‰O›±b3k|ø&YÇëZXÂlâÚÌä™ofæ#‹½‰w›è'Wsì,wDÀŽš'ægµ:ü«BÍ9ã;’'‘:Ô‘ý«ü¦t$ÛEGè‹‚vf1ö½ëùÖ1¢pžv»¢GÙJmÜ¥z]ÃØZô0&¦]¶­q‰ÍH ‰|*±µé(þ©ØD>oeÃ@ä›3¼­
-Od tœ/^ÈGâ-`öß9ýçc^ÓU¥âŒÕ™CTd7Wí§ÎÔ`›‰*	¾É%ôª£ÿJ%ò))HS#\DÜ^Ôe’öÐ»CFôƒåâéZA8Öyœ]‰ZÜ$wƒF[–Ø¬¾òUŠžìžþì–¢WR5mßu=¨Ú7O!·SP.©n˜NãªÕ²j²ø-¯Y-Ó,Öxd(~THFS¥•‹,Êt«*¹pÉ»Ð(¯q;yZ`ÒNã:Ñ/ÚDòužˆæËâLö$Î¢að04¿ì&	ÓR`?è½:8ÞÑ?{èžùÑfH! ßþ|>V»—Wë¨q#?
-V‹|®¥ðÎåÆ‡ÍôKö©Å~li¶Ê@ïØìW)‹~ùa$˜±pýRlÄQ¤vwÞ8
-«Ðhç7Q+ÞŠÜ¥»pd\Äãb¿§QÖËÉëÞ«Ó¾Æ
-VÞ¿ŽnUäM5{)©D¢5M­ò‰¡ÄÎën¡HÍV!lHY¨8cxÎ^ñ¨È<ÅùøaúèHFJ9:’ûÒv$2s4²s! éá³úcÇ^´KÓ9˜w2ž¡l–lk¼5™]6sÏ=xÂ%,N¸¾“z3Iƒ&§ç·Q¼÷R±	2Á¢ãïêŒWÁæ‹OT{5™Ð±ž÷±y–Ý˜K,—>tEIŠ¨ÖÁ­óu	þVhm’I!£èÌÃ[ÎNÊ¡m¯Œ(áš_˜<DïïïÿÔýZcðõßÈz¼Tæ…µguGÀŒ–p¢%*ÚÒ›UÛ›º7%WqO“6§É…+»`U.<3¡.5’ëü[jšå-:L¡`ä¯­±œû¹çÞ7ó˜|Å1a‘Ùÿ©ÿú¤·¯!¶Õ¸*¶Mqf§;¡‰ƒn%bàÌ±2Ž¢åÇîAï§Wd@çëQÎS¯`×Ó(›Æ„‘õ6‚d6VØ1zËØ~A¦Û®2r­Ê¸UÜN157¥ÞS™yX×ÜÄÇi™Ð,¢¸¬VˆcA@äÎ¹Ð_¹hÌ^±ÿ¿”íç“ü™TOÕ•›t*Óú–:Y©dW=næQXyÖgRZýÈú¸ Èáê@ìÕÆŒýhê=œ ƒZÇž{gûsÃöÉ<å€éxw¤ X4²àþ0ƒ‚HêðùŸ²i¿Éç_:3 &!‹‰Æ½ùE~lç—C²³} R:°ÌiìuÕxÆoÍD…ÊìîKÈÇpWÍBJ	®™Š\«r>{I’–è#¯šó´ÒM#›Mg’ú6H_ù	ÁtöÓÊG›Wž“œT\w\™z5æöc2·L${Õ¼âäš)%UjÌf7™M!8¾jF²\×¡¡njrVóz™ÌÇðqcaÉ%5HOc¶®­–ËÌü}{ÞL
-ËÊáþü¯›`–ì5—«Ä÷^qy5>^IŒkîý.ù
-gïï+¹RßgÖ–ÎN<ž—õ’Úèx	Kª3¨à•s R6ùñ­ts_¦›ø2·[/ÓÅ¾‹y)Oóe2‰d@dš—O¼øÀ×
-Æï—™©YUfÆÈS&Yþè:°¢ ˆÞ}–òÜ;˜ÛApmýwd!7Pˆ\ÉûÅŒa—LSïxutñ~K0ÑXJàÒ–/˜m÷÷Ý] §<%]w‚üóÌv	HŸð/º‘MÙ`¾LØÆ¸\ò×ï>Ü>ÿõ—âÊc>w‘M•ªç¡Kwf’æ,Iž°–9?ò¾ä<Ôl¸šóÔ¾L*Ã'•Dçüˆþ‹nòsom*„
-‘6±
-ªdˆìâ&xWshæpo¶§ˆqœ%·´R¡êØ2ÉjC°ðì¿¬ôSÇÝ¡†›CC÷®Ö“úiêÐÐÜ‘Aí|¢Ò3Õkî¨‡†­-òÖ¢¸1=Š‚–HIð>Nî-"Üž8‘Ø"’-*Ó‹Ò
-×Äýeù¼×KØéT7¥Ô¾¸ŠP·úÏßn­¤®uND}U×Éiß%'£½þëÓS@ÌÇ¶?Ù¯¹F•ÖÔŠR©ÕN]©,­Òk5
-Ó+s–¨_€ËŽ0âbªJÃ¢×8
-~©èZ©1í™ŽªÌ9ÍŸ})2	:»ŽŠ
-¾ÒšÀ³†&‘RDò¯8>=îÿX°žžöû»ýÝ’ó¯¶Ó†y}Ð?í‡9îîw÷ËŒ´:Š¼]ÏÙÍŒrYWÞ_v‡IÖ•þùûÂ¿Z¶*ÔÓKdý®8ëƒƒý½W…Cøé§ÞNOs×ó93Âžñ“Ý+7Uòwy¦à,‡]s¤ÈE›L=õAgð„$)œ]—Êä^/´¶ˆ
-vú;?íörž¦…¸¶1s¥Kþ>WÄó|,—ÅÊå¶Ã”R‘‰]´„¼¾>Ýgäµ¦L	XíV¸_Çå«cÕ´ÏŒá¤V|Øb¿ö©"ˆõ"¼ÔßšmH¬Üˆ‹ŸIüOÿõ™`4aîÉÌ‚Rqã3 ö`çj`l\%£°×Û=ÙÕbb^•×@ß,EFEæá½·§Ï «x®Xè?uþ§+yOdœDA"X-º}f‘*’+¤¶ è±”òcÜ™JÞ•R¶R?Îm“ý6{ëù6ù[¡V+n¶O©*ê…ç™äZ
-…%?‹âS©)dJ¿zA!>Ðæër¹6zµ$äÚK26žu°½4ŠlŠÖ‹°è•ÙôDÙ]Í*?ÞY·õ'p¾ÞÃû…*ï^¦Ê‰÷ IÙÙ@KR_CR®ÑøÏÕC¤ÙS°Ÿ¥®@Mßp®ô•.sŠ\G< –z*tc4Påy©ÕŽW<ªXCS^®GÓiÍ½ôlc£w"$øXd²—uÇ3õÃnž“ª–ÂRþKù‘Mƒ5xã@Xâ¯îô< ¶ßŽ™6Sãz…F•7ãîE›‰Þ¨‘ä´™µÚ5Ï:ðl&v~³	Ë6›Ü1À¨aì³)95”T6§£¦ùWm1z4õQÐMéO4¤@¨6©á¦;GÏœ³x(6-ñÎ9óx(LVÛ‰QRÄ¦¨_.K³_r1	/©R¨ÆSñkM˜#T±øœäJcHrª^Ö¥¦w5Iw°Ô>üãâZ|'Ô(b£íWiwUeÕ9ôßäxÊò”Šv*/ž2)‚¤ße	…ˆ’÷˜þŠÛð7	ú8ÿ™Fjë?žñ>û^S•ü$…'ÒÊÀ±”¼%Éè"äSÇ[b•mjš«øúQÀËlËqE¼ßŽ³—0oîv­Â-ä—SÍU¯Ìà),›ùÁ…T;6à‚Œ'þb	5‚*£H=oŒ
-É\^UVÎ~ëEþ½Cƒ`ä)åðã©5žq·Š•JàM¼ÔßVæÐU®àk`Hfof1f|íF˜Ö®|Éc­JòÒ00#¿ƒ?ª#’	Æ’âa)§Y¾	NÄR/æÐ_1ÅIù8fê‘t£Ú!jLUï¦'.¦øO]ÀÝKobëŸ•û¬ðÅR34•s&ê3ìåáÞ]•ÊY¹eî+‹S1I$!‰š¾ÈXJÒfJ¹~îÚ×“«ÔLÈ¤åŽùæïU¿,^â¸pÚïõû9¿@}?	d
-¯çõÃ&ßÃ2èäQ<jëÄ#½B=½t¸ë7ü_ ŽŒÖ_÷û—‡äm÷¼{Ñ½$çWoÎ.ÉrÑ¾G†ý^÷M÷ŒŒºïköð<÷îmw8öñçl–ÉÛDc|E¾$2Ó'ÖœÚ{Œ»N¢Î0U 05¢â¨…Ós¥Ã†Ò+pòOŠ‰&ºëç7~±ï¬ñã8–E¡EŸèÍv•|mØixjÚ 
-BoÎ’a5´”{Ö*ãR¼LÚÇ<2®ú¥•0ã¹íÐq/ù®$‘än.Õ”©+qÆ?¿`Ç1A‹UFnNgÎÜöœ~„~^½Vð(ºGx&Þ•<º“ë³y°ƒ‚Íhö.Oy¬B™h¥Ž	(U»½5NR'|£Èm«XÆ(Ó#[Œ’ji}—cè“ˆ±F­@”‘$ùíÌÃ™üQúIÜ`pµ—Ð=çÓå!À=ê ÙúNÙj+Ð¼9oÕà±UØÿš>éSºë{«‰P0¬å‚{lMV^²èJ&{
-àŽXC§Ç¯¯zV¾hãŠ{S„Ï&+ï.›y¥\P—þŽ×=± cØU4¹·Ð:Üt_ÒÜ«V(P°º%.€]1h=Šÿ.Í²¤ˆœ¨Ì"¤0vã,0ÚÐ€¿o§~¶µA)KUñŒ¼þ¿elwõis)ËÖ±p)	fm˜ƒ³<·žKVÚ8—qÍÀ²‚¬šUkÀbö›ã3xª6W•è0°±Á‹"Ã—ƒ‚çö3À íñ+{Û4½•¿’–Án¬Ò9®¼eù­­îS¹uféKõ¿–¤uN…Ã1¦]îÆû	b±Q‚gó×uáØñƒô¢XÔ—a…Ñ‚˜^	,«½XÖoôUÒ0TT¦p(ül˜ >NŸê<ÊÒ€åóÂKZLÿZpRw*<e’Œ|=ÝÉÜvÑ¡ˆ¸Ó^$«s²³þJõÀøcy÷…$ÒzSj^ûa,¯”‚†q^ËD…ÉÒØß8¨âº±øêÔÓ°\ÔF1ÏöŒ†É„é°M×j /£73¾¬²mUð÷Ž†”©;±—»so<+ƒºxïžðfÂ½úŠMùÈwÙoÚqñ0Ï;éc'žt	8=T/’Ý[`3í°0â~_Ï[ê]
-jK¨7wˆëª™SV^×ò÷XË	k_Ÿd;=ÇÛP`%~–eG¨“94–Gó“/9"nõ—Zê8 TiEõ>°Žpg€2ÆH®ê7<FÅ‹XÔröÀDa0E);QÂ³ÈÔÕÑ”½r%„SÖ$^Â¸Z!IpdÎ’z’‰Åô ˜&¯*WsV¬èug¬­Tä‡×À‚2ÊnCL‡ÉÓlŸ+ŠwÉÈ›ßzá[X·ôžÚdDçiw]Ï}œ{˜³´¸K§€/€Øc^Á£Ènð3¼µÿlXÆ[ºLXæŒr—?'?½rk?Oª5ôqG’ÇKNQXèH­TZÚ¯â–Åoø(¶ç
-f·¦¯\ï–: ¡Ó›%š…}ï¾F˜næ‚­Ð|‹^Eû@M„Œ|×”â³À
-ˆÍòéâccJ(Ð€9A?}£7ÄÀŒù*yÀFÓÐx2sö¾0F{:øæ4;^4TÄ`ÁŠ_Æ›lÏËÒž/íü·Õº¹)M-¬Ž¬~øõÿ  ÿÿ ^¡â•
+                xœÔXïnÛ6ÿž§à»–i“¶[l@ä?IW§)b·ýÐm±¦D¤â¸E€=ËmO²#-9¶EÉr–`Û}H$ñxäï÷ãBkªôˆL½ÖX'W¤DÓ«1	fYÚj?=@[¢"’Rô+ºYÒ°#dBåÐ|ô^¼Æaê˜.¤‚9~¦µHºtB2®Û×ŽõJ³–3M,`•À‚ýï=¿é÷_Ÿ¼ì¼9v¬VÌ£‰Þ˜…¿DLÓ’ºÃåôšh&’ª-÷
+/\ôÖf™ lØl£ï¥5ÞÁÝ>³˜Légh»u£§p¾>îp‘…ŸR.HXëx—ª@²4ßQËÏˆF’dJä™µÜÓc²	£fáóü+özGÏK^YÏJ_†)	¨ô\†æ,Ô‘÷‹1Tž7¢7Ú#Æ‰åþgõ(½à&;Ï!‰%#|Ñ˜b½HÅT’4Z`NÆ”ˆœR·	ðeÓÈ¬Ù_½`_ðp‡û·¯™æºá2ƒÊ¾AæsÌ`™rvØñ”&]d1œç€dIA¹}ðˆ”dq1ñZ$MÁˆM½Ã¯J$­§hã›4ÕÏ”TÇfìÉá“–#ú·å`8NÐ¹M<·ò^LÊfíx´UÆÅJeƒ$¼I¯B¢ÉÐXÈÐzâÛ‡¡–bÚø¨?-sÊ&6ùžTÖ?îõú'{PÙúfw$åsOWÌ“}ÙçcÆYdpÛ5'úÿ#ž&ûÿwyçîiõxxˆ†pŽæFLó»{¯ìoáç%›“ÅúE13Â·Þé¨6«ÓeñæÌ:75ƒR®ûGÇ¯ßl!ÄuÔ)	C–L=-Røür#wÚÑñm…£Ð€)½úÎ&È[–>Ê|ÇLõâT/¼ö6Œ:D†å¬qíhÂ8?'7_lÖ1‹1¹â• ^r6qÇ²šy\zÜ$ÇÞËîIÿçönzñÅPM¯#[q«Ö+NüøÈíœ‘œ—N8›&æ:…¬žqþ86âòÌH5_)°äSžÅ€„dŽª @7¨Â<bd'ÄÆ"\¸¶éòz²œB¹àTu”UÜe±¢[AYÇÊDÈ	"ô=ÿÚgàÅ³ßJ¸¡cä>ðYùú€2rÙ€ÜJFª’îRÌ«snXi
+-«[À«Îi#×Tj(:yÆ>ç:|Qm'’}3ÇÅO ÆM¦´°u÷†íUïS=§4qguEÀ)dqâ®V•l#õ$PHNwpÀ	‰+îÿuy(¤ùµë’Ê«¸vfýè^Ák}šepòoQý„ N‹†ib¢½¯äšàL3Ž²ŠâOCèp~Ä/&Ðé¬ÝÔ‘ïÇm˜ßBï}ô×ZckÐjÐ¾5ªiƒ 4:Ÿa‰¾g€«yºêÈÞVŽòh+e`ú‹¼RÞÓTµ¶Û²«ÕÝ–@Hh¬€°‡tÁyÓÛp®-{h¹&M˜=U›VL`“ÞZ’±êÐô#ÑQ}‚»Œ›æÒì›e0ôã¡ÅÁþ–TT™ëîšÑ9å8ï™ûRÄ¿/2œ¯¹ß¦Î—Ø•.!I(MÏ5¥Ò &3j½µ…Ø˜š^
+©Œˆb…,Í›¬ »NƒÞ‡ÓÑÙÕðìârÔÆ*‚¤ÞÏ1gó.’)OLãT
+EÕ2ŸŠ²o‡[ƒ‹§÷óª±ö-ìEŒ<úõnjûó}xïXäÇºäo€²ajàãðò‹@3üðQi‘ÝZõMWý;Ë¶Ôýîr¹Äöî«Äˆû˜ÜDMÏ±.@¼ºÑ/MÛR¯QÏÇ¼N…Ü-÷RM&ç]›_ÐüÕâªÀÍn3ÿ•œìZ¿ÿIJž‘4S÷MÈîñQÿ¨ÿx	é)­ì•–oþ  ÿÿ Htâ
