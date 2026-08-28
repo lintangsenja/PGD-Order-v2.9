@@ -4,6 +4,7 @@ import com.example.ui.screens.ProfileAvatar
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.AuditSelisihKasScreen
 import com.example.util.ImageUtils
+import com.example.util.ReportExportManager
 
 import android.app.Activity
 import android.graphics.Bitmap
@@ -9308,9 +9309,18 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     // Tombol 1: EXCEL (.xlsx)
                     Button(
                         onClick = {
-                            exportToExcel(context, startDate, endDate, totalUnits, totalOmzet, totalMutationOut, combinedList) { name, uri, type ->
-                                exportSuccessDialogInfo = ExportDialogInfo(name, uri, type)
-                            }
+                            ReportExportManager.exportToExcel(
+                                context = context,
+                                startDate = startDate,
+                                endDate = endDate,
+                                orders = orders,
+                                mutations = mutations,
+                                accounts = accounts,
+                                pelangganList = pelangganList,
+                                onExportSuccess = { name, uri, type ->
+                                    exportSuccessDialogInfo = ExportDialogInfo(name, uri, type)
+                                }
+                            )
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -9340,9 +9350,18 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     // Tombol 2: CETAK PDF
                     Button(
                         onClick = {
-                            exportToPdf(context, startDate, endDate, totalUnits, totalOmzet, totalMutationOut, combinedList) { name, uri, type ->
-                                exportSuccessDialogInfo = ExportDialogInfo(name, uri, type)
-                            }
+                            ReportExportManager.exportToPdf(
+                                context = context,
+                                startDate = startDate,
+                                endDate = endDate,
+                                orders = orders,
+                                mutations = mutations,
+                                accounts = accounts,
+                                pelangganList = pelangganList,
+                                onExportSuccess = { name, uri, type ->
+                                    exportSuccessDialogInfo = ExportDialogInfo(name, uri, type)
+                                }
+                            )
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -10167,36 +10186,11 @@ fun BackupRestoreTab(viewModel: FinanceViewModel) {
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Firebase Cloud Synchronization Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("backup_cloud_sync_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE4DAF7)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-      xœÜ[ënã¶þ¿OÁ- ÷d•æ²é¶À)ß’=Mš öîþh‰¶YË¢@QIÜE€ó,çÑÎ“œJòM¢nqÚí™,R9œùæ›¡BÈ¦,„Ë'œIòOr\Úîy×ôé3wÕÌj¼!9òÀ¤âõÎ=>õÌW0ÀêÚîÂ&?%}¼eþ3!ùÂW0Š”ÔŸ²tœõ/{P‡u˜zdÌÏÒ&_r¾VnÃ¾f^uö!ÎÞí,­£l7hçŽeZJG<™‚’³}…ýQìÿÁ¬SóŒ¶:;¬;ù.s»BúLg4`ÖÑ1>_a€1uæS‰X]á	iýð4NúýÁyÛ`\©8 ^PcÑNŸ/R+Ê¼X·(|A§ìs”@ó	±x8\ú÷§m=Dh÷Ø„FX*Ü&ÌYÒ­ë‰È½ñ=î³Ý®º©'|÷Ïi¼™LŠU³¡žÉÅ…sl¸dc
-Ãâ„Zå£(®»Þ›³óÓîO'%[ƒ’‡Ú¶ŽKmËÜúll)F¿d_GìI•ï«‚^¨¬!÷çRø<¤!'Zó4ª¥ÇpÑSo4o·Õ2SIƒÙÒV\yìš¹<Z”6]üÌøt†¬~Øá¹UlÀÓ¦¹Þ¾“ÎñÉÙOMµRK…;>Ñ2à€‹.™G%çÔ·m»etm°!8#wŒzo_0r>W|’<Óãb<ûïc{ÆÂ]€îMÔûîÝiç¬¿_ã~~“{ûðUQH:Ô²Ü>ÃHN Æ˜·+D´†!Ü¬„tñ;[¼ÖE¿×?ÚÆ­Íà}Üsãö ßé÷¦0ÒÕ ÓÑC%Å&ó>0O+°
-ÓêŸöÎ?æL«Ûë‚[Q`)$(yP×…XkB­ïõS®7N‹÷
-e_Ì¥»9-„û²H\JrPš”8 ýX‰ëèþšït¹t<¦½¤âc,gv¹Õs}»wr<8”®×Äöøª Ëã‹¸÷ˆÙ3¯"hï'¢·1	°¶q«gf÷B²w2·.WNÝãðÔÊÆ·Óˆšqgî³0„æ#í?™ñ @}ð'‚<Ò¹ŠHs)0Iç3žõO#:þ_&¡1[µòÖö¨íÑ:š´‹°±ÜUS;J4Nz<Ù ]%^·7«O‘Ì-•—ì Ã]ÑP¡Ž€1¾p±H	«öæÐRŸ¨ç·˜¹âH,ÆÂ#Ã•!›S´âÜ':‘RE)°ð»  LùyàìY¸g+É§S&5à¡î­6y6/œùtì1Æøf¥æÞuc¼=‹ýè´<Ý´¤#:µZcåß‡0“{_<¶
-ÕKy3Âf¬â$±í±þ© ,¶rÌì)ÙÍXM¥ì<©l=mžqUâ'.$Â¸a]óûÓøPyœÝyl®ÂlûEÚÕcÞÆ¬FM®>Q/bá6‹>:Ý¥ÑÍêp;\ ˜Ï"yŒ õ½•€.??ø.¼ÜF,7&°Ggåô%Ô	’š0Úi“·lwPŠ[uÄ”ùÁOGô³òêa½Jh;d!VöÅ6÷QÀiÊñbÊ¸ÿ
-f¶dÙ´Ì˜f*hÞlàï_P2Dùó-®™¾~Û«œ_äÿÚ (HJ	$¡\Ì‘£à0­öQGÛRÃÕC™,¡nvPï`f›;ìb»‰$m£üÌ‚ÍDÈUŠ¹=Øjè9ä‹Àcøc [¬ÖäúÚuï//‹0l+aŠÙS¦µÚm;ÈÂ'-ƒ;’AkO8.ïŠF¾35yúÂjÝ^ôîo°€vßÑ{pÿíÖäìßCá·²#ç0»ªm#ÇÉoO¸Û;3wÛælñ
-ïcÊ#nE„Í=›µ¦ÍLÌ²yevæ±š pî”ûiËúOd5ÇdÌQ¥(’è|àcà	jHƒòƒH'¢Št)ž Šv¨Œj>jÊ'tÙ;¥ñá}~|0Ç„4ÄóŸ/ ì_Q95PôZH¿½Œ”ñ&RX¨r›b›˜oB
-»¼™X-²^ØèC.dëžpSo®2ºÀ¶ï¿oåhÿkB $nÝ»TÑ=éxãN[2˜RÂÄÖ&7„²äÔ¦:”f¯Š==ñè×EŸÛÈã3ôÛîèßxªÌÿ¯ÅõÕ&'²˜ùð˜|Õ]oºÎ;þH—›âJÌ©·³àæ‡òÕkzÆÞv·¢C>%‚ô0oM:·´3´\ñP­îc"¦>!Þ·yØ_jie
-È]*Ý¬Õ4)°¯‡\áŠ?4ÉŽ˜Í¼.<nƒcrˆ[/ÆƒÆ:…Ç½™û¥;~RP-lò“©üTœ¼¦¾Ôa^´ àHD&^å¤^å¡W•OöREßò!ûèB~5®z¾™W+ÙôHuúÔ™‘/ÉÝ‡U¼ý%ó‚|×Aiz>µoBiàFZ!Í]	¥Ñ—–µëù]K÷MÝ«¬2úg~îYxNˆRT:~ñy!J­
-ÖÚlŸ–¡¡ìíåoþÝ[ëã<‚ÿ™´È?¸ØbZ¨ù>P;RÜ³“rÎÇ!d8ßÙGÈt6”Ž<ò×qžo‘_;ä¿ÿþl£‡»*)VA)¯öå›§Siò='‚G­b]Ì”+”ÅËÎ6S)KuwÅ+ ì¡Yp’ôV|EÉeÞ(ºÈõ®j³âÂFË°6Œ„ŽC€Ån©šUûZispLÎÁ|a||ù¸«ý þHaä8ñç"ëãâ$gH±øWü"Äìäõ^8yE™	ä	õ])¸‹9×”){$(Pƒ3½ZMÄž¸)æRdÌäŒ†Ü#.’$ëðÝÜ1®ú¿]Œ.ï‡—7w£¶ÎÀ¨ë-¬ÒaÏK–tA§°=¶ôYlO)í+YÖÕÍoÍVU¹÷3ÌEYìgÒr˜ÎÏënqm]$Ûã7¸2"5à±{öE!Þ¿Vªi¤¼Wq*Š«vrˆRTw¹‹}»<” äW`’!*›¡˜þS¡ôáâÅú|Ípò*à®a°—áiQµi¬à+hÕËÃÔoÊ‡ùZl²§×ý“¼¤A65È*_v¢45È—ŸÍÆŸßü  ÿÿ #}3V
+  xœä[ënÛ8þß§à»€<›*Í¥™Î »@|Kº“L‚Øm´DÛË¢ QIÜ"À>Ë>Ú>ÉžCI¶,‰ºÅ™í`ÏT)ŠçþC•¾pÂ•k¼!1­„Ígœùäïä:¾ÜŒ!™3î8×ôiÌ¿2£»;äQÛæîÜ8:3m¯{°|`¾äuÎ}Ÿºs¶b®„åS¿ÌÀ£³{ëøQõd—|Û¬pxHFÜgS0ÒwDh“ñÚµ¾pùW*¹pIŸúöf:þ0vöVÅVšµ/Ü–‹oj\²@NèÜèL©µ½{wrÀNî-xc'Å2R° ƒÞ‰Ðµ™Ý¾Ëü1Þ4ŽßíJÉŽð˜»°˜¸p_–p%å°†úñ_óË‚K–Yk*|[1ÛScé‹%3Žà¥ÑSÆ»§Ñhx:8ýÔÍ<ËöÉ´`+ÃdÐ°£ÛÃÔìãî²úSJÉXZÕÔQš£3Á„š˜â.;E,!Ý‰Ç<O¾2,ä··³E‡ÏÝdƒÉµÙ‡?ÌÿÏqÖÅk,„Ï¿¢¹”0:FF{L>2ææ)â´”Û}í¼îî·jz—SSH=ñ¤g©®Y¦É0*žêw´3Ùr¸g‡Èðj,€ahîãÆÖ©G'Ãáè<ëÔYÂXb,Ó”öù2±"}„ÅËe‹ÄWtÎ>3KªPÆgÄàuðÞ®Z"0ãÈcâmKû£i*Ü¸ÄÂìT54.‹æÞÌfå¢I‰gÀËç^Þ:›„êT¯"¹ìV7gç§ýŸO*TƒT;”mçƒR–ô£ÏÚ‘(6WèuÂždµ^%ÌBa¹»ÄüÐ€G9»†Ä¹v0e^S0@NÉ¼Ý”kOÌ}ê-Ö¦äÒa×Ìæáªzµhñãónh´ùaö„c×±T–Uê;éŸœýÜVúHD˜ñ‰Î˜Ùþ¸èš9Ô§Á’º¦iv´®¡6 cäŽQç­ä+FÎ—’Ïâg:`\Œ€Gàü}¨g*ìõxÑ½xß¿?í÷kÜÏo
+ožK*Ã€ô¨=g…sÆ¡?ƒ£WW	¾‹B¸^	ó§ Ù`x:uµªÍÅûhfêöhØK¶PµÛŠXmÅØ2¿­þ`p¬Ine‰¥x …ÌnŒ~P,&Xnœ–ë
+i_È©º9-÷U™¸ä µ:HQBú©ÖQóÞésßr˜ò’š¥PÎìrgæööàäxt<ª ]¯Û£«’X]${1Û¡SæÔÚûÉ¨Z5Æ	¶†wfæÔ¸ç’¿“»u¹qêàO|~‹cú‘n-]`±¤ü'·$¨îLGº”!	",ÆãÓå‚çýóÿ«;	E¼=*{4ŽfÝ²ØXíª	ŠÄ'+@W…×íÍãšC$ýHm–USëŠýsˆñ…Ì"$¬ØÛ‡–æ@½xD'b5o,€ŒÙ’¢>Ñ¥,+…Ûw À–¿‘Î…;¦ôù|Î|ðPöF—<ëg.:Ì†5~Ø„Rýì¦9Þ\D~tZ]n¦º¢Òš¡®xÌöBÓôRÜŒa3ñ¦59U?ã>ieã#ßD­_Ç‚lùs6Â¨°¾þýI~¨½Nvi.ô¶_&]µæm„šaÕøê3uBì¢è£Ó,Œn×‡Ë`r<‹à1„Ò÷Ö‡èùó£kÃË¡Àm…r# «ëg)P’Jšq«»M[¥¤òQ•1ýâä§2úYu÷°Y'¤° ;ûB›ûhà´ÅxdÜ3ß²lÛf,H35$¯7ð/h"ýñ×Nß¿íÕ®/Š¥ 
+‚’GA<ŒÐ_“è@ò0éöQKÙR”ƒÍC¹*¡iuÐì`¦ü8P’Rà¨¸2d3þŠJÉì¨fŽùÊsþ©£³º¾¶íûËËÕ*:äJ@šbæœÉØGn×Œ2ðICcÁ–Ï`t ¬Ù»¢¡k-@LŽº0:·ƒûl Ý÷¢Cá¿ìlÎü=n'¿r²«}º­qŠÇcìö^Ýv1[Äá}dCEÀ­°i²g{ Ö éY¾®Ì¯>ô.ÜrƒƒoõŠëÕg•²L¢êOž#¨¦*N"½JÒ§xb Q´GýPAõGMÅ€.§2?|(ÎúœähÿËrê…ý+êÏ5½Q¤ße#S2Þ„UvÛØ&<æê"…»¾™êy¢^Pô¡Š.dçž°$“o®2ºÂ±ìHÿ{Š@qÞº·©¤{
+@ºã÷™o`â˜Ò „‰%·eñ©MýPVZ=¼jìˆG·iô¹¾@¿ Fÿ|§Îþÿ·qg{•Æ„c!¿	“oòü&|ÞñGºN'Š+±¤N†áö‡òõ{zÚÞî´²C>)¼ä0o:w¤!´€\ñ@nîc"‚>Þ7y0\yrmäÈù
+u;ªj°ïóK?¥ ý…Çâ+Ã‹ö ±Iã±Î~j^¢ñ“’na›œtí§òâ5ñ¥sÂG"~ìUVâUzUYûd/]ô2/ .wãê×›E½’´¯@©3¤Ö‚|‹ïŽ8pñö¹»RÛó©}»R7RiïJH­¾´lÜÏ¯éZjnÕ7´	ý‘Ÿ{–ž"•µŽ_|^ˆÔ¨ƒµuÓ¥UGhH{;FCú“÷Öù´Aó¿ùw[L5¿Ój†’;fÜÎù4†
+ç¯æÑ*”ÐGþ:íÂóòküç_ÿV‹¥fØ›f‘d5„òj_¾éãtBm¾çÄàÑ¨Y!åmñª³Í„ªJÝ,YÂ‡Â
+öØ‚*8.zk>‹$ýuƒÙHª‘È•V•Yqa¢e)#¡Ó B‡d·T.ê}­”^‹s0_X_cB=n+?h¾RZVô¹Èö¸8®™G¾Xý3zÆìøÍ^8~E•	um_pk®9“æDP€+ºdŠ[Äž$¸)ÖRdÊü¸ClîÅEÖà»…k\»˜\Þ/oî&]3X€Q7c¬ÖaÏKXº sPÏŠ­<uFÙSû*Øººùí¢Wµg?Ã^$¸‘Á~!Ã'‹©ú¼©ŠË"Vk¿Á•1RC<¶¯Á¾(Ãû—J=‰TÏ*ŸQGpõN‘Êú.w‘oW§¤âL¼Dc3$ÝÿT¨|¸|F¹<_3¼JpWab/“Ùÿú¨ÝÆ&\c­·yyøMõ2ß‹Mß/1ÉKê…A[ƒ¬óe'R[ƒ|ùÙlô÷ùÍ  ÿÿ þçw
