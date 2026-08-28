@@ -1833,7 +1833,6 @@ fun OrderCardItem(
     val kertasHpp = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
     val tintaHpp = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
     val pengemasanHpp = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
-
     val wastePct = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Waste / Rusak" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
     val tenagaKerjaPct = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
     val listrikPct = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
@@ -1856,7 +1855,7 @@ fun OrderCardItem(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Konfirmasi Hapus Riwayat") },
-            text = { Text("Apakah Anda yakin ingin menghapus riwayat transaksi ini?") },
+            text = { Text("Apakah Anda yakin ingin menghapus riwayat transaksi '${order.namaPesanan}'?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1885,16 +1884,15 @@ fun OrderCardItem(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize()
-            .clickable { expanded = !expanded }
             .testTag("riwayat_order_card_${order.idOrder}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-        border = BorderStroke(0.8.dp, colorScheme.outlineVariant),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.2.dp, Color(0xFFE4DAF7)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header: Name, Date & Status
             Row(
@@ -1907,71 +1905,109 @@ fun OrderCardItem(
                         text = order.namaPesanan,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = colorScheme.onSurface,
+                        color = Color(0xFF2D1E4B),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = order.tanggalOrder,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.outline
-                        )
+                        Surface(
+                            color = Color(0xFFF3EDFA),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = Color(0xFF6A4C93),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = order.tanggalOrder,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF6A4C93),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
                         if (order.isNota) {
                             Surface(
-                                color = Color(0xFFF3E8FF),
-                                shape = RoundedCornerShape(4.dp)
+                                color = Color(0xFFEDE4FF),
+                                shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
                                     text = "NOTA",
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF6B46C1)
+                                    color = Color(0xFF6A4C93)
                                 )
                             }
                         }
                     }
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Surface(
-                    color = if (isLunas) MintAurora else PinkAurora,
-                    border = BorderStroke(0.8.dp, if (isLunas) Color(0xFF86EFAC) else Color(0xFFFCA5A5)),
+                    color = if (isLunas) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                    border = BorderStroke(1.dp, if (isLunas) Color(0xFFA5D6A7) else Color(0xFFEF9A9A)),
                     shape = RoundedCornerShape(100.dp)
                 ) {
-                    Text(
-                        text = if (isLunas) "LUNAS" else "PENDING",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isLunas) HijauGelap else MagentaLembut
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(if (isLunas) Color(0xFF2E7D32) else Color(0xFFC62828), CircleShape)
+                        )
+                        Text(
+                            text = if (isLunas) "LUNAS" else "PENDING",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (isLunas) Color(0xFF2E7D32) else Color(0xFFC62828)
+                        )
+                    }
                 }
             }
 
-            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-            // Main Details Row
-            Row(
+            // Main Details Row: Paket, Harga Satuan, Total Bayar
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFF9F7FD),
+                border = BorderStroke(0.8.dp, Color(0xFFEAE2F7))
             ) {
-                Column {
-                    Text("Rincian Paket", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
-                    Text("${order.qtyOrder} ${order.satuan}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Harga Satuan", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
-                    Text(formatRupiah(order.hargaSatuan), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Total Bayar", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
-                    Text(formatRupiah(totalPendapatan), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = colorScheme.primary)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Volume / Satuan", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7A6E91))
+                        Text("${order.qtyOrder} ${order.satuan}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2D1E4B))
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Harga Satuan", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7A6E91))
+                        Text(formatRupiah(order.hargaSatuan), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2D1E4B))
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Total Bayar", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7A6E91))
+                        Text(formatRupiah(totalPendapatan), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFF6A4C93))
+                    }
                 }
             }
 
@@ -1979,43 +2015,44 @@ fun OrderCardItem(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable { expanded = !expanded },
-                color = if (expanded) colorScheme.primaryContainer.copy(alpha = 0.4f) else colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(8.dp)
+                color = if (expanded) Color(0xFFEDE4FF) else Color(0xFFF3EDFA),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(0.8.dp, if (expanded) Color(0xFFD3C5EE) else Color(0xFFE5DDF3))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.PieChart,
                             contentDescription = null,
-                            tint = colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
+                            tint = Color(0xFF6A4C93),
+                            modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = if (expanded) "Sembunyikan Rincian Autoplotting" else "Lihat Rincian Autoplotting Envelopes",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = colorScheme.primary
+                            color = Color(0xFF6A4C93)
                         )
                     }
                     Icon(
                         imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         contentDescription = null,
-                        tint = colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+                        tint = Color(0xFF6A4C93),
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            // EXPANDED AUTOPLOTTING ENVELOPES BREAKDOWN (Same style & structure as Transaksi Operasional)
+            // EXPANDED AUTOPLOTTING ENVELOPES BREAKDOWN
             AnimatedVisibility(
                 visible = expanded,
                 enter = fadeIn(),
@@ -2031,56 +2068,57 @@ fun OrderCardItem(
                         text = "Rincian Autoplotting Envelopes:",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = colorScheme.primary
+                        color = Color(0xFF3B2369)
                     )
 
                     val itemsList = listOf(
-                        Triple("Kertas (Qty * ${formatDouble(kertasHpp)})", dynamicKertas, Icons.Default.Description),
-                        Triple("Tinta (Qty * ${formatDouble(tintaHpp)})", dynamicTinta, Icons.Default.InvertColors),
-                        Triple("Pengemasan (Plastik * ${formatDouble(pengemasanHpp)})", dynamicPengemasan, Icons.Default.Inventory2),
-                        Triple("Waste (${formatDouble(wastePct * 100.0)}%)", dynamicWaste, Icons.Default.DeleteOutline),
-                        Triple("Tenaga Kerja (${formatDouble(tenagaKerjaPct * 100.0)}%)", dynamicTenagaKerja, Icons.Default.Badge),
-                        Triple("Listrik (${formatDouble(listrikPct * 100.0)}%)", dynamicListrik, Icons.Default.FlashOn),
-                        Triple("Maintenance Alat (${formatDouble(maintenancePct * 100.0)}%)", dynamicMaintenance, Icons.Default.Build),
-                        Triple("Sisa Laba Bersih", dynamicSisaLaba, Icons.Default.MonetizationOn)
+                        Triple("Kertas (Qty * ${formatDouble(kertasHpp)})", dynamicKertas, Icons.Default.Description to Color(0xFF1E88E5)),
+                        Triple("Tinta (Qty * ${formatDouble(tintaHpp)})", dynamicTinta, Icons.Default.InvertColors to Color(0xFF8E24AA)),
+                        Triple("Pengemasan (Plastik * ${formatDouble(pengemasanHpp)})", dynamicPengemasan, Icons.Default.Inventory2 to Color(0xFFFB8C00)),
+                        Triple("Waste (${formatDouble(wastePct * 100.0)}%)", dynamicWaste, Icons.Default.DeleteOutline to Color(0xFFE53935)),
+                        Triple("Tenaga Kerja (${formatDouble(tenagaKerjaPct * 100.0)}%)", dynamicTenagaKerja, Icons.Default.Badge to Color(0xFF43A047)),
+                        Triple("Listrik (${formatDouble(listrikPct * 100.0)}%)", dynamicListrik, Icons.Default.FlashOn to Color(0xFFFBC02D)),
+                        Triple("Maintenance Alat (${formatDouble(maintenancePct * 100.0)}%)", dynamicMaintenance, Icons.Default.Build to Color(0xFF6D4C41)),
+                        Triple("Sisa Laba Bersih", dynamicSisaLaba, Icons.Default.MonetizationOn to Color(0xFF00897B))
                     )
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        itemsList.forEach { (label, value, icon) ->
+                        itemsList.forEach { (label, value, iconPair) ->
                             val isLaba = label.startsWith("Sisa Laba")
+                            val (icon, iconTint) = iconPair
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(
-                                        if (isLaba) Color(0x26FFEB3B) else Color.Transparent,
-                                        RoundedCornerShape(6.dp)
+                                        if (isLaba) Color(0xFFE0F2F1) else Color(0xFFF9F7FD),
+                                        RoundedCornerShape(8.dp)
                                     )
-                                    .padding(vertical = 6.dp, horizontal = 6.dp),
+                                    .padding(vertical = 6.dp, horizontal = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Icon(
                                         imageVector = icon,
                                         contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = if (isLaba) Color(0xFFD84315) else colorScheme.secondary
+                                        modifier = Modifier.size(16.dp),
+                                        tint = iconTint
                                     )
                                     Text(
                                         text = label,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = if (isLaba) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isLaba) colorScheme.primary else colorScheme.onSurface
+                                        color = if (isLaba) Color(0xFF00695C) else Color(0xFF2D1E4B)
                                     )
                                 }
                                 Text(
                                     text = formatRupiah(value),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isLaba) Color(0xFFD84315) else colorScheme.onSurface
+                                    color = if (isLaba) Color(0xFF00695C) else Color(0xFF2D1E4B)
                                 )
                             }
                         }
@@ -2129,8 +2167,6 @@ fun OrderCardItem(
         }
     }
 }
-
-
 @Composable
 fun FuturePlaceholderScreen(title: String, icon: ImageVector, description: String) {
     val colorScheme = MaterialTheme.colorScheme
@@ -5459,6 +5495,7 @@ fun OrderHistoryCard(
 
     val qty = order.qtyOrder.toDouble()
     val totalPendapatan = qty * order.hargaSatuan
+
     val dynamicKertas = qty * kertasHpp
     val dynamicTinta = qty * tintaHpp
     val dynamicPengemasan = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
@@ -5469,21 +5506,23 @@ fun OrderHistoryCard(
     val dynamicTotalModal = dynamicKertas + dynamicTinta + dynamicPengemasan + dynamicWaste + dynamicTenagaKerja + dynamicListrik + dynamicMaintenance
     val dynamicSisaLaba = totalPendapatan - dynamicTotalModal
 
+    val isLunas = order.status == "Lunas"
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize()
-            .clickable { expanded = !expanded },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = colorScheme.surface
-        ),
-        border = getAuroraBorder(),
+            .testTag("order_history_card_${order.idOrder}"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.2.dp, Color(0xFFE4DAF7)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Top Row: Title, Date, Status Chip and Header Action Icons
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
@@ -5494,91 +5533,186 @@ fun OrderHistoryCard(
                         text = order.namaPesanan,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = colorScheme.onSurface
+                        color = Color(0xFF2D1E4B),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = order.tanggalOrder,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.outline
-                        )
-                        Box(
-                            modifier = Modifier
-                                .background(colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        Surface(
+                            color = Color(0xFFF3EDFA),
+                            shape = RoundedCornerShape(6.dp)
                         ) {
-                            Text(
-                                text = "${order.qtyOrder} ${order.satuan}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = colorScheme.onSecondaryContainer
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = Color(0xFF6A4C93),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = order.tanggalOrder,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF6A4C93),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        if (order.isNota) {
+                            Surface(
+                                color = Color(0xFFEDE4FF),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "NOTA",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6A4C93)
+                                )
+                            }
                         }
                     }
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = formatRupiah(order.totalPendapatan),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Surface(
+                        color = if (isLunas) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                        border = BorderStroke(1.dp, if (isLunas) Color(0xFFA5D6A7) else Color(0xFFEF9A9A)),
+                        shape = RoundedCornerShape(100.dp)
                     ) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (order.status == "Lunas") MintAurora else PinkAurora
-                            ),
-                            shape = RoundedCornerShape(6.dp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(if (isLunas) Color(0xFF2E7D32) else Color(0xFFC62828), CircleShape)
+                            )
                             Text(
-                                text = if (order.status == "Lunas") "SUDAH LUNAS" else "PENDING BAYAR",
+                                text = if (isLunas) "LUNAS" else "PENDING",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (order.status == "Lunas") HijauGelap else MagentaLembut,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isLunas) Color(0xFF2E7D32) else Color(0xFFC62828)
                             )
                         }
+                    }
 
-                        IconButton(
-                            onClick = onEdit,
-                            modifier = Modifier
-                                .size(28.dp)
-                                .testTag("edit_order_header_button_${order.idOrder}")
-                        ) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "Edit Transaksi",
-                                tint = colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { showDeleteConfirm = true },
-                            modifier = Modifier
-                                .size(28.dp)
-                                .testTag("delete_order_header_button_${order.idOrder}")
-                        ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Hapus Transaksi",
-                                tint = colorScheme.error,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("edit_order_header_button_${order.idOrder}")
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit Transaksi",
+                            tint = Color(0xFF6A4C93),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("delete_order_header_button_${order.idOrder}")
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Hapus Transaksi",
+                            tint = Color(0xFFC62828),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
 
+            // Main Details Row: Paket, Harga Satuan, Total Bayar
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFF9F7FD),
+                border = BorderStroke(0.8.dp, Color(0xFFEAE2F7))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Volume / Satuan", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7A6E91))
+                        Text("${order.qtyOrder} ${order.satuan}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2D1E4B))
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Harga Satuan", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7A6E91))
+                        Text(formatRupiah(order.hargaSatuan), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2D1E4B))
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Total Tagihan", style = MaterialTheme.typography.labelSmall, color = Color(0xFF7A6E91))
+                        Text(formatRupiah(totalPendapatan), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFF6A4C93))
+                    }
+                }
+            }
+
+            // Expand / Collapse Affordance Banner
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { expanded = !expanded },
+                color = if (expanded) Color(0xFFEDE4FF) else Color(0xFFF3EDFA),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(0.8.dp, if (expanded) Color(0xFFD3C5EE) else Color(0xFFE5DDF3))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PieChart,
+                            contentDescription = null,
+                            tint = Color(0xFF6A4C93),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (expanded) "Sembunyikan Rincian Autoplotting" else "Lihat Rincian Autoplotting Envelopes",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF6A4C93)
+                        )
+                    }
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = Color(0xFF6A4C93),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // EXPANDED AUTOPLOTTING ENVELOPES BREAKDOWN
             AnimatedVisibility(
                 visible = expanded,
                 enter = fadeIn(),
@@ -5587,65 +5721,64 @@ fun OrderHistoryCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp, bottom = 4.dp),
+                        .padding(top = 4.dp, bottom = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    HorizontalDivider(color = colorScheme.outlineVariant)
-                    
                     Text(
                         text = "Rincian Autoplotting Envelopes:",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = colorScheme.primary
+                        color = Color(0xFF3B2369)
                     )
 
                     val itemsList = listOf(
-                        Triple("Kertas (Qty * ${formatDouble(kertasHpp)})", dynamicKertas, Icons.Default.Description),
-                        Triple("Tinta (Qty * ${formatDouble(tintaHpp)})", dynamicTinta, Icons.Default.InvertColors),
-                        Triple("Pengemasan (Plastik * ${formatDouble(pengemasanHpp)})", dynamicPengemasan, Icons.Default.Inventory2),
-                        Triple("Waste (${formatDouble(wastePct * 100.0)}%)", dynamicWaste, Icons.Default.DeleteOutline),
-                        Triple("Tenaga Kerja (${formatDouble(tenagaKerjaPct * 100.0)}%)", dynamicTenagaKerja, Icons.Default.Badge),
-                        Triple("Listrik (${formatDouble(listrikPct * 100.0)}%)", dynamicListrik, Icons.Default.FlashOn),
-                        Triple("Maintenance Alat (${formatDouble(maintenancePct * 100.0)}%)", dynamicMaintenance, Icons.Default.Build),
-                        Triple("Sisa Laba Bersih", dynamicSisaLaba, Icons.Default.MonetizationOn)
+                        Triple("Kertas (Qty * ${formatDouble(kertasHpp)})", dynamicKertas, Icons.Default.Description to Color(0xFF1E88E5)),
+                        Triple("Tinta (Qty * ${formatDouble(tintaHpp)})", dynamicTinta, Icons.Default.InvertColors to Color(0xFF8E24AA)),
+                        Triple("Pengemasan (Plastik * ${formatDouble(pengemasanHpp)})", dynamicPengemasan, Icons.Default.Inventory2 to Color(0xFFFB8C00)),
+                        Triple("Waste (${formatDouble(wastePct * 100.0)}%)", dynamicWaste, Icons.Default.DeleteOutline to Color(0xFFE53935)),
+                        Triple("Tenaga Kerja (${formatDouble(tenagaKerjaPct * 100.0)}%)", dynamicTenagaKerja, Icons.Default.Badge to Color(0xFF43A047)),
+                        Triple("Listrik (${formatDouble(listrikPct * 100.0)}%)", dynamicListrik, Icons.Default.FlashOn to Color(0xFFFBC02D)),
+                        Triple("Maintenance Alat (${formatDouble(maintenancePct * 100.0)}%)", dynamicMaintenance, Icons.Default.Build to Color(0xFF6D4C41)),
+                        Triple("Sisa Laba Bersih", dynamicSisaLaba, Icons.Default.MonetizationOn to Color(0xFF00897B))
                     )
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        itemsList.forEach { (label, value, icon) ->
+                        itemsList.forEach { (label, value, iconPair) ->
                             val isLaba = label.startsWith("Sisa Laba")
+                            val (icon, iconTint) = iconPair
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(
-                                        if (isLaba) Color(0x26FFEB3B) else Color.Transparent,
-                                        RoundedCornerShape(6.dp)
+                                        if (isLaba) Color(0xFFE0F2F1) else Color(0xFFF9F7FD),
+                                        RoundedCornerShape(8.dp)
                                     )
-                                    .padding(vertical = 6.dp, horizontal = 6.dp),
+                                    .padding(vertical = 6.dp, horizontal = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Icon(
                                         imageVector = icon,
                                         contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = if (isLaba) Color(0xFFD84315) else colorScheme.secondary
+                                        modifier = Modifier.size(16.dp),
+                                        tint = iconTint
                                     )
                                     Text(
-                                        label,
+                                        text = label,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = if (isLaba) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isLaba) colorScheme.primary else colorScheme.onSurface
+                                        color = if (isLaba) Color(0xFF00695C) else Color(0xFF2D1E4B)
                                     )
                                 }
                                 Text(
-                                    formatRupiah(value),
+                                    text = formatRupiah(value),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isLaba) Color(0xFFD84315) else colorScheme.onSurface
+                                    color = if (isLaba) Color(0xFF00695C) else Color(0xFF2D1E4B)
                                 )
                             }
                         }
@@ -5686,7 +5819,6 @@ fun OrderHistoryCard(
         }
     }
 }
-
 // ==========================================
 // TAB 3: MUTASI MANUAL KAS
 // ==========================================
@@ -10058,153 +10190,13 @@ fun BackupRestoreTab(viewModel: FinanceViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFF3EEFA)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isSyncing) Icons.Default.Sync else if (isCloudOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
-                                contentDescription = "Firebase Sync",
-                                tint = Color(0xFF6A4C93),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "Sinkronisasi Cloud",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF3B2369)
-                            )
-                            Text(
-                                text = if (isSyncing) "Sedang menyelaraskan..." else if (isCloudOnline) "Firestore Real-time Aktif" else "Mode Offline",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF554B6E)
-                            )
-                        }
-                    }
-
-                    // Status Badge
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSyncing) Color(0xFFEDE4FF) else if (isCloudOnline) Color(0xFFF3EEFA) else Color(0xFFFFEBEE),
-                        border = BorderStroke(1.dp, if (isSyncing) Color(0xFF6A4C93) else if (isCloudOnline) Color(0xFFE4DAF7) else Color(0xFFFFCDD2))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSyncing) Color(0xFF6A4C93) else if (isCloudOnline) Color(0xFF6A4C93) else Color(0xFFD32F2F))
-                            )
-                            Text(
-                                text = if (isSyncing) "Syncing" else if (isCloudOnline) "Online" else "Offline",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSyncing) Color(0xFF3B2369) else if (isCloudOnline) Color(0xFF3B2369) else Color(0xFFD32F2F)
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = Color(0xFFEDE4FF), thickness = 1.dp)
-
-                // Info waktu sinkron terakhir
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Terakhir Disinkronkan",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF554B6E)
-                        )
-                        Text(
-                            text = cloudLastSyncTime,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF3B2369)
-                        )
-                    }
-
-                    // Tombol Sinkronkan Sekarang
-                    Button(
-                        onClick = { viewModel.triggerCloudSync() },
-                        enabled = !isSyncing,
-                        modifier = Modifier
-                            .height(42.dp)
-                            .testTag("btn_sync_now"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF6A4C93),
-                            contentColor = Color.White,
-                            disabledContainerColor = Color(0xFFEDE4FF),
-                            disabledContentColor = Color(0xFF6A4C93)
-                        ),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = Color(0xFF6A4C93)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Proses...",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Sync,
-                                contentDescription = "Sinkronkan Sekarang",
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Sinkronkan Sekarang",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Two primary backup/restore action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = {
-                    val formattedDate = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                    createDocumentLauncher.launch("PGD_Order_Backup_$formattedDate.json")
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                xœÔXïnÛ6ÿž§à»–i“¶[l@ä?IW§)b·ýÐm±¦D¤â¸E€=ËmO²#-9¶EÉr–`Û}H$ñxäï÷ãBkªôˆL½ÖX'W¤DÓ«1	fYÚj?=@[¢"’Rô+ºYÒ°#dBåÐ|ô^¼Æaê˜.¤‚9~¦µHºtB2®Û×ŽõJ³–3M,`•À‚ýï=¿é÷_Ÿ¼ì¼9v¬VÌ£‰Þ˜…¿DLÓ’ºÃåôšh&’ª-÷
-/\ôÖf™ lØl£ï¥5ÞÁÝ>³˜Légh»u£§p¾>îp‘…ŸR.HXëx—ª@²4ßQËÏˆF’dJä™µÜÓc²	£fáóü+özGÏK^YÏJ_†)	¨ô\†æ,Ô‘÷‹1Tž7¢7Ú#Æ‰åþgõ(½à&;Ï!‰%#|Ñ˜b½HÅT’4Z`NÆ”ˆœR·	ðeÓÈ¬Ù_½`_ðp‡û·¯™æºá2ƒÊ¾AæsÌ`™rvØñ”&]d1œç€dIA¹}ðˆ”dq1ñZ$MÁˆM½Ã¯J$­§hã›4ÕÏ”TÇfìÉá“–#ú·å`8NÐ¹M<·ò^LÊfíx´UÆÅJeƒ$¼I¯B¢ÉÐXÈÐzâÛ‡¡–bÚø¨?-sÊ&6ùžTÖ?îõú'{PÙúfw$åsOWÌ“}ÙçcÆYdpÛ5'úÿ#ž&ûÿwyçîiõxxˆ†pŽæFLó»{¯ìoáç%›“ÅúE13Â·Þé¨6«ÓeñæÌ:75ƒR®ûGÇ¯ßl!ÄuÔ)	C–L=-Røür#wÚÑñm…£Ð€)½úÎ&È[–>Ê|ÇLõâT/¼ö6Œ:D†å¬qíhÂ8?'7_lÖ1‹1¹â• ^r6qÇ²šy\zÜ$ÇÞËîIÿçönzñÅPM¯#[q«Ö+NüøÈíœ‘œ—N8›&æ:…¬žqþ86âòÌH5_)°äSžÅ€„dŽª @7¨Â<bd'ÄÆ"\¸¶éòz²œB¹àTu”UÜe±¢[AYÇÊDÈ	"ô=ÿÚgàÅ³ßJ¸¡cä>ðYùú€2rÙ€ÜJFª’îRÌ«snXi
--«[À«Îi#×Tj(:yÆ>ç:|Qm'’}3ÇÅO ÆM¦´°u÷†íUïS=§4qguEÀ)dqâ®V•l#õ$PHNwpÀ	‰+îÿuy(¤ùµë’Ê«¸vfýè^Ák}šepòoQý„ N‹†ib¢½¯äšàL3Ž²ŠâOCèp~Ä/&Ðé¬ÝÔ‘ïÇm˜ßBï}ô×ZckÐjÐ¾5ªiƒ 4:Ÿa‰¾g€«yºêÈÞVŽòh+e`ú‹¼RÞÓTµ¶Û²«ÕÝ–@Hh¬€°‡tÁyÓÛp®-{h¹&M˜=U›VL`“ÞZ’±êÐô#ÑQ}‚»Œ›æÒì›e0ôã¡ÅÁþ–TT™ëîšÑ9å8ï™ûRÄ¿/2œ¯¹ß¦Î—Ø•.!I(MÏ5¥Ò &3j½µ…Ø˜š^
-©Œˆb…,Í›¬ »NƒÞ‡ÓÑÙÕðìârÔÆ*‚¤ÞÏ1gó.’)OLãT
-EÕ2ŸŠ²o‡[ƒ‹§÷óª±ö-ìEŒ<úõnjûó}xïXäÇºäo€²ajàãðò‹@3üðQi‘ÝZõMWý;Ë¶Ôýîr¹Äöî«Äˆû˜ÜDMÏ±.@¼ºÑ/MÛR¯QÏÇ¼N…Ü-÷RM&ç]›_ÐüÕâªÀÍn3ÿ•œìZ¿ÿIJž‘4S÷MÈîñQÿ¨ÿx	é)­ì•–oþ  ÿÿ Htâ
+      xœÜ[ënã¶þ¿OÁ- ÷d•æ²é¶À)ß’=Mš öîþh‰¶YË¢@QIÜE€ó,çÑÎ“œJòM¢nqÚí™,R9œùæ›¡BÈ¦,„Ë'œIòOr\Úîy×ôé3wÕÌj¼!9òÀ¤âõÎ=>õÌW0ÀêÚîÂ&?%}¼eþ3!ùÂW0Š”ÔŸ²tœõ/{P‡u˜zdÌÏÒ&_r¾VnÃ¾f^uö!ÎÞí,­£l7hçŽeZJG<™‚’³}…ýQìÿÁ¬SóŒ¶:;¬;ù.s»BúLg4`ÖÑ1>_a€1uæS‰X]á	iýð4NúýÁyÛ`\©8 ^PcÑNŸ/R+Ê¼X·(|A§ìs”@ó	±x8\ú÷§m=Dh÷Ø„FX*Ü&ÌYÒ­ë‰È½ñ=î³Ý®º©'|÷Ïi¼™LŠU³¡žÉÅ…sl¸dc
+Ãâ„Zå£(®»Þ›³óÓîO'%[ƒ’‡Ú¶ŽKmËÜúll)F¿d_GìI•ï«‚^¨¬!÷çRø<¤!'Zó4ª¥ÇpÑSo4o·Õ2SIƒÙÒV\yìš¹<Z”6]üÌøt†¬~Øá¹UlÀÓ¦¹Þ¾“ÎñÉÙOMµRK…;>Ñ2à€‹.™G%çÔ·m»etm°!8#wŒzo_0r>W|’<Óãb<ûïc{ÆÂ]€îMÔûîÝiç¬¿_ã~~“{ûðUQH:Ô²Ü>ÃHN Æ˜·+D´†!Ü¬„tñ;[¼ÖE¿×?ÚÆ­Íà}Üsãö ßé÷¦0ÒÕ ÓÑC%Å&ó>0O+°
+ÓêŸöÎ?æL«Ûë‚[Q`)$(yP×…XkB­ïõS®7N‹÷
+e_Ì¥»9-„û²H\JrPš”8 ýX‰ëèþšït¹t<¦½¤âc,gv¹Õs}»wr<8”®×Äöøª Ëã‹¸÷ˆÙ3¯"hï'¢·1	°¶q«gf÷B²w2·.WNÝãðÔÊÆ·Óˆšqgî³0„æ#í?™ñ @}ð'‚<Ò¹ŠHs)0Iç3žõO#:þ_&¡1[µòÖö¨íÑ:š´‹°±ÜUS;J4Nz<Ù ]%^·7«O‘Ì-•—ì Ã]ÑP¡Ž€1¾p±H	«öæÐRŸ¨ç·˜¹âH,ÆÂ#Ã•!›S´âÜ':‘RE)°ð»  LùyàìY¸g+É§S&5à¡î­6y6/œùtì1Æøf¥æÞuc¼=‹ýè´<Ý´¤#:µZcåß‡0“{_<¶
+ÕKy3Âf¬â$±í±þ© ,¶rÌì)ÙÍXM¥ì<©l=mžqUâ'.$Â¸a]óûÓøPyœÝyl®ÂlûEÚÕcÞÆ¬FM®>Q/bá6‹>:Ý¥ÑÍêp;\ ˜Ï"yŒ õ½•€.??ø.¼ÜF,7&°Ggåô%Ô	’š0Úi“·lwPŠ[uÄ”ùÁOGô³òêa½Jh;d!VöÅ6÷QÀiÊñbÊ¸ÿ
+f¶dÙ´Ì˜f*hÞlàï_P2Dùó-®™¾~Û«œ_äÿÚ (HJ	$¡\Ì‘£à0­öQGÛRÃÕC™,¡nvPï`f›;ìb»‰$m£üÌ‚ÍDÈUŠ¹=Øjè9ä‹Àcøc [¬ÖäúÚuï//‹0l+aŠÙS¦µÚm;ÈÂ'-ƒ;’AkO8.ïŠF¾35yúÂjÝ^ôîo°€vßÑ{pÿíÖäìßCá·²#ç0»ªm#ÇÉoO¸Û;3wÛælñ
+ïcÊ#nE„Í=›µ¦ÍLÌ²yevæ±š pî”ûiËúOd5ÇdÌQ¥(’è|àcà	jHƒòƒH'¢Št)ž Šv¨Œj>jÊ'tÙ;¥ñá}~|0Ç„4ÄóŸ/ ì_Q95PôZH¿½Œ”ñ&RX¨r›b›˜oB
+»¼™X-²^ØèC.dëžpSo®2ºÀ¶ï¿oåhÿkB $nÝ»TÑ=éxãN[2˜RÂÄÖ&7„²äÔ¦:”f¯Š==ñè×EŸÛÈã3ôÛîèßxªÌÿ¯ÅõÕ&'²˜ùð˜|Õ]oºÎ;þH—›âJÌ©·³àæ‡òÕkzÆÞv·¢C>%‚ô0oM:·´3´\ñP­îc"¦>!Þ·yØ_jie
+È]*Ý¬Õ4)°¯‡\áŠ?4ÉŽ˜Í¼.<nƒcrˆ[/ÆƒÆ:…Ç½™û¥;~RP-lò“©üTœ¼¦¾Ôa^´ àHD&^å¤^å¡W•OöREßò!ûèB~5®z¾™W+ÙôHuúÔ™‘/ÉÝ‡U¼ý%ó‚|×Aiz>µoBiàFZ!Í]	¥Ñ—–µëù]K÷MÝ«¬2úg~îYxNˆRT:~ñy!J­
+ÖÚlŸ–¡¡ìíåoþÝ[ëã<‚ÿ™´È?¸ØbZ¨ù>P;RÜ³“rÎÇ!d8ßÙGÈt6”Ž<ò×qžo‘_;ä¿ÿþl£‡»*)VA)¯öå›§Siò='‚G­b]Ì”+”ÅËÎ6S)KuwÅ+ ì¡Yp’ôV|EÉeÞ(ºÈõ®j³âÂFË°6Œ„ŽC€Ån©šUûZispLÎÁ|a||ù¸«ý þHaä8ñç"ëãâ$gH±øWü"Äìäõ^8yE™	ä	õ])¸‹9×”){$(Pƒ3½ZMÄž¸)æRdÌäŒ†Ü#.’$ëðÝÜ1®ú¿]Œ.ï‡—7w£¶ÎÀ¨ë-¬ÒaÏK–tA§°=¶ôYlO)í+YÖÕÍoÍVU¹÷3ÌEYìgÒr˜ÎÏënqm]$Ûã7¸2"5à±{öE!Þ¿Vªi¤¼Wq*Š«vrˆRTw¹‹}»<” äW`’!*›¡˜þS¡ôáâÅú|Ípò*à®a°—áiQµi¬à+hÕËÃÔoÊ‡ùZl²§×ý“¼¤A65È*_v¢45È—ŸÍÆŸßü  ÿÿ #}3V
