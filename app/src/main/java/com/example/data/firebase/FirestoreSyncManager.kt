@@ -128,7 +128,7 @@ class FirestoreSyncManager(
 
     private val listeners = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
 
-    fun startRealtimeListeners(scope: CoroutineScope) {
+    fun startRealtimeListeners(scope: CoroutineScope, onProfileUpdated: ((String, String, String, String) -> Unit)? = null) {
         val db = firestore ?: return
         if (!isFirebaseInitialized()) return
 
@@ -360,6 +360,27 @@ class FirestoreSyncManager(
         } catch (e: Throwable) {
             Log.i("FirestoreSyncManager", "Customers listener setup notice: ${e.message}")
         }
+
+        // 5. Listen to App Profile ('app_profile/current_profile')
+        try {
+            val regProfile = db.collection("app_profile").document("current_profile")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.i("FirestoreSyncManager", "Profile listener notice: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && snapshot.exists()) {
+                        val adminName = snapshot.getString("adminName") ?: "PGD Order"
+                        val tagline = snapshot.getString("tagline") ?: "Pradipta Graha Digital"
+                        val avatarType = snapshot.getString("avatarType") ?: "avatar_admin"
+                        val avatarUri = snapshot.getString("avatarUri") ?: ""
+                        onProfileUpdated?.invoke(adminName, tagline, avatarType, avatarUri)
+                    }
+                }
+            listeners.add(regProfile)
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Profile listener setup notice: ${e.message}")
+        }
     }
 
     suspend fun syncOrderToCloud(order: TransaksiOrderMasuk) {
@@ -516,6 +537,26 @@ class FirestoreSyncManager(
             _syncStatusText.value = "Sinkronisasi selesai"
         } finally {
             _isSyncing.value = false
+        }
+    }
+
+    suspend fun syncProfileToCloud(adminName: String, tagline: String, avatarType: String, avatarUri: String) {
+        val db = firestore ?: return
+        if (!isFirebaseInitialized()) return
+        try {
+            val profileDoc = db.collection("app_profile").document("current_profile")
+            val data = hashMapOf(
+                "adminName" to adminName,
+                "tagline" to tagline,
+                "avatarType" to avatarType,
+                "avatarUri" to avatarUri,
+                "updatedAt" to com.google.firebase.Timestamp.now()
+            )
+            profileDoc.set(data, com.google.firebase.firestore.SetOptions.merge()).await()
+            updateLastSyncTime()
+            Log.i("FirestoreSyncManager", "Profile synced to cloud successfully: $adminName")
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Error syncing profile to cloud: ${e.message}")
         }
     }
 }

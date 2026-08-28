@@ -264,6 +264,15 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             avatarType = avatarType,
             avatarUri = avatarUri
         )
+
+        // Real-time synchronization to Cloud Firestore
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.syncProfileToCloud(cleanName, cleanTagline, avatarType, avatarUri)
+            } catch (e: Throwable) {
+                Log.w("FinanceViewModel", "Error syncing profile to Firestore: ${e.message}")
+            }
+        }
     }
 
     init {
@@ -271,7 +280,24 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         val database = AppDatabase.getDatabase(application)
         val syncManager = com.example.data.firebase.FirestoreSyncManager(application, database.financeDao())
         repository = FinanceRepository(database.financeDao(), syncManager)
-        syncManager.startRealtimeListeners(viewModelScope)
+        syncManager.startRealtimeListeners(viewModelScope) { adminName, tagline, avatarType, avatarUri ->
+            // Synchronize cloud updates in real-time to local StateFlow & Preferences
+            val current = _userProfile.value
+            if (current.adminName != adminName || current.tagline != tagline || current.avatarType != avatarType || current.avatarUri != avatarUri) {
+                prefs.edit()
+                    .putString("admin_name", adminName)
+                    .putString("tagline", tagline)
+                    .putString("avatar_type", avatarType)
+                    .putString("avatar_uri", avatarUri)
+                    .apply()
+                _userProfile.value = UserProfile(
+                    adminName = adminName,
+                    tagline = tagline,
+                    avatarType = avatarType,
+                    avatarUri = avatarUri
+                )
+            }
+        }
 
         viewModelScope.launch(Dispatchers.IO) {
             try {

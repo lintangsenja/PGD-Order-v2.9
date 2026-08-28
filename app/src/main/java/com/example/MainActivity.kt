@@ -1,6 +1,15 @@
 package com.example
 
 import android.app.Activity
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -2314,63 +2323,7 @@ fun DashboardTab(
             }
         }
 
-        // Quick Action Chip: Order Nota (Slim UI)
-        item {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onNavigateToOrderNota() }
-                    .testTag("dashboard_order_nota_card"),
-                shape = RoundedCornerShape(14.dp),
-                color = colorScheme.surface,
-                border = BorderStroke(0.8.dp, colorScheme.outlineVariant)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(colorScheme.primaryContainer, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ReceiptLong,
-                                contentDescription = null,
-                                tint = colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "Order Nota",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Hitung HPP & ploting sub-anggaran pos",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Icon(
-                        imageVector = Icons.Default.ArrowForward,
-                        contentDescription = null,
-                        tint = colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
+
 
         // Section: Visualisasi Pemasukan (Plotting) vs Pengeluaran (Riil) Pos Alokasi Kas
         item {
@@ -2894,7 +2847,7 @@ fun PosAllocationComparisonSection(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val context = LocalContext.current
-    var activeDebitItem by remember { mutableStateOf<AllocationComparisonItem?>(null) }
+
     var showCustomDateDialog by remember { mutableStateOf(false) }
 
     Card(
@@ -3235,21 +3188,7 @@ fun PosAllocationComparisonSection(
                                         )
                                     }
 
-                                    // Quick Debit Button
-                                    Button(
-                                        onClick = { activeDebitItem = item },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp),
-                                        shape = RoundedCornerShape(100.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = colorScheme.primaryContainer,
-                                            contentColor = colorScheme.onPrimaryContainer
-                                        )
-                                    ) {
-                                        Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text("Debet", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                    }
+
                                 }
                             }
 
@@ -3358,144 +3297,6 @@ fun PosAllocationComparisonSection(
                 }
             }
         }
-    }
-
-    // Modal Debit Dialog for recording immediate expense against the chosen Pos
-    activeDebitItem?.let { item ->
-        var nominalStr by remember { mutableStateOf("") }
-        var descriptionStr by remember { mutableStateOf("") }
-        var errorMessage by remember { mutableStateOf<String?>(null) }
-
-        AlertDialog(
-            onDismissRequest = { activeDebitItem = null },
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.RemoveCircle,
-                        contentDescription = null,
-                        tint = Color(0xFFC62828),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = "Debet ${item.namaAkun}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Saldo saat ini: ${formatRupiah(item.sisaSaldo)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colorScheme.onSurfaceVariant
-                    )
-
-                    OutlinedTextField(
-                        value = nominalStr,
-                        onValueChange = {
-                            nominalStr = it
-                            errorMessage = null
-                        },
-                        label = { Text("Nominal Pengeluaran (Rp)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color(0xFFF7F5FC),
-                            focusedBorderColor = colorScheme.primary,
-                            unfocusedBorderColor = colorScheme.outlineVariant,
-                            focusedLabelColor = colorScheme.primary,
-                            unfocusedLabelColor = colorScheme.onSurfaceVariant,
-                            focusedTextColor = colorScheme.onSurface,
-                            unfocusedTextColor = colorScheme.onSurface,
-                            cursorColor = colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = descriptionStr,
-                        onValueChange = {
-                            descriptionStr = it
-                            errorMessage = null
-                        },
-                        label = { Text("Keterangan Pengeluaran") },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Contoh: Pembelian stok, Penggunaan operasional") },
-                        singleLine = false,
-                        maxLines = 2,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color(0xFFF7F5FC),
-                            focusedBorderColor = colorScheme.primary,
-                            unfocusedBorderColor = colorScheme.outlineVariant,
-                            focusedLabelColor = colorScheme.primary,
-                            unfocusedLabelColor = colorScheme.onSurfaceVariant,
-                            focusedTextColor = colorScheme.onSurface,
-                            unfocusedTextColor = colorScheme.onSurface,
-                            cursorColor = colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    errorMessage?.let { error ->
-                        Text(
-                            text = error,
-                            color = colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val amount = parseDoubleInput(nominalStr)
-                        if (amount == null || amount <= 0.0) {
-                            errorMessage = "Harap masukkan nominal angka yang valid!"
-                            return@Button
-                        }
-                        if (descriptionStr.isBlank()) {
-                            errorMessage = "Harap isi keterangan pengeluaran!"
-                            return@Button
-                        }
-
-                        viewModel.insertMutation(
-                            tanggal = viewModel.getTodayString(),
-                            idAkun = item.idAkun,
-                            jenis = "Uang Keluar",
-                            nominal = amount,
-                            keterangan = descriptionStr
-                        )
-
-                        Toast.makeText(context, "Pengeluaran ${item.namaAkun} berhasil dicatat & disinkronkan!", Toast.LENGTH_SHORT).show()
-                        activeDebitItem = null
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFC62828),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(100.dp)
-                ) {
-                    Text("Catat Pengeluaran", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { activeDebitItem = null }) {
-                    Text("Batal")
-                }
-            }
-        )
     }
 
     // Custom Date Range Dialog using native Material 3 DateRangePicker
@@ -3667,6 +3468,764 @@ fun PosAllocationComparisonSection(
     }
 }
 
+
+// ==========================================
+// REAL-TIME SALDO & KALKULASI SIMULASI
+// ==========================================
+@Composable
+fun AccountBalanceBadge(
+    label: String,
+    balance: Double,
+    tintColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val isNegative = balance < 0
+    Surface(
+        color = tintColor.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, tintColor.copy(alpha = 0.25f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountBalanceWallet,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = tintColor
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = formatRupiah(balance),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isNegative) Color(0xFFDC2626) else tintColor
+            )
+        }
+    }
+}
+
+@Composable
+fun EstimatedBalanceSimulationCard(
+    mutationType: String,
+    currentBalance: Double,
+    nominal: Double,
+    sourceName: String = "",
+    targetName: String = "",
+    targetBalance: Double = 0.0,
+    modifier: Modifier = Modifier
+) {
+    if (nominal <= 0.0) return
+
+    when (mutationType) {
+        "Uang Keluar" -> {
+            val remaining = currentBalance - nominal
+            val isInsufficient = nominal > currentBalance
+
+            Surface(
+                color = if (isInsufficient) Color(0xFFFEF2F2) else Color(0xFFF0FDF4),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, if (isInsufficient) Color(0xFFFCA5A5) else Color(0xFF86EFAC)),
+                modifier = modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isInsufficient) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Saldo tidak mencukupi!",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFDC2626)
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (!isInsufficient) {
+                                Icon(
+                                    imageVector = Icons.Default.Calculate,
+                                    contentDescription = null,
+                                    tint = Color(0xFF16A34A),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            Text(
+                                text = "Estimasi Sisa Saldo:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isInsufficient) Color(0xFF991B1B) else Color(0xFF166534),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Text(
+                            text = formatRupiah(remaining),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isInsufficient) Color(0xFFDC2626) else Color(0xFF15803D)
+                        )
+                    }
+                    if (isInsufficient) {
+                        Text(
+                            text = "Defisit: " + formatRupiah(nominal - currentBalance),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFDC2626),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+        "Pindah Saldo" -> {
+            val remainingSource = currentBalance - nominal
+            val newTarget = targetBalance + nominal
+            val isInsufficient = nominal > currentBalance
+
+            Surface(
+                color = if (isInsufficient) Color(0xFFFEF2F2) else Color(0xFFF0FDF4),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, if (isInsufficient) Color(0xFFFCA5A5) else Color(0xFF86EFAC)),
+                modifier = modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isInsufficient) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Saldo Dompet Asal tidak mencukupi!",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFDC2626)
+                            )
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SwapHoriz,
+                                contentDescription = null,
+                                tint = Color(0xFF0F766E),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Simulasi Sisa Perpindahan Saldo:",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F766E)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Estimasi Sisa Asal ($sourceName):",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isInsufficient) Color(0xFF991B1B) else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatRupiah(remainingSource),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isInsufficient) Color(0xFFDC2626) else Color(0xFF0F766E)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Estimasi Saldo Tujuan ($targetName):",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatRupiah(newTarget),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF15803D)
+                        )
+                    }
+                }
+            }
+        }
+        "Uang Masuk" -> {
+            val newBalance = currentBalance + nominal
+            Surface(
+                color = Color(0xFFF0FDF4),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+                modifier = modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = Color(0xFF16A34A),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Estimasi Saldo Setelah Masuk:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF166534),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Text(
+                        text = formatRupiah(newBalance),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF15803D)
+                    )
+                }
+            }
+        }
+    }
+}
+
+data class QuickMutationConfig(
+    val type: String, // "Uang Masuk", "Uang Keluar", "Pindah Saldo"
+    val accountId: Int
+)
+
+@Composable
+fun QuickMutationDialog(
+    initialType: String = "Uang Keluar",
+    initialAccountId: Int,
+    accounts: List<MasterAkunSaldo>,
+    viewModel: FinanceViewModel,
+    onDismiss: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val summary by viewModel.dashboardSummary.collectAsStateWithLifecycle()
+    val accountBalances = remember(summary) { summary.rows.associate { it.idAkun to it.sisaSaldoRiil } }
+
+    var tanggal by remember { mutableStateOf(viewModel.getTodayString()) }
+    var mutationType by remember { mutableStateOf(initialType) }
+
+    val initialAccountIdx = remember(accounts, initialAccountId) {
+        val idx = accounts.indexOfFirst { it.idAkun == initialAccountId }
+        if (idx >= 0) idx else 0
+    }
+
+    var selectedAccountIndex by remember(initialAccountIdx) { mutableIntStateOf(initialAccountIdx) }
+    var selectedSourceAccountIndex by remember(initialAccountIdx) { mutableIntStateOf(initialAccountIdx) }
+    var selectedTargetAccountIndex by remember(initialAccountIdx, accounts) {
+        val targetIdx = if (initialAccountIdx == 0 && accounts.size > 1) 1 else 0
+        mutableIntStateOf(targetIdx)
+    }
+
+    var nominalText by remember { mutableStateOf("") }
+    var keterangan by remember { mutableStateOf("") }
+    var showErrorAlert by remember { mutableStateOf(false) }
+
+    var accountDropdownExpanded by remember { mutableStateOf(false) }
+    var sourceDropdownExpanded by remember { mutableStateOf(false) }
+    var targetDropdownExpanded by remember { mutableStateOf(false) }
+
+    val showDatePicker = {
+        val parts = tanggal.split("-")
+        val year = parts.getOrNull(0)?.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
+        val month = (parts.getOrNull(1)?.toIntOrNull() ?: (Calendar.getInstance().get(Calendar.MONTH) + 1)) - 1
+        val day = parts.getOrNull(2)?.toIntOrNull() ?: Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
+
+        val dpd = android.app.DatePickerDialog(context, { _, y, m, d ->
+            tanggal = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d)
+        }, year, month, day)
+        dpd.show()
+    }
+
+    val customFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = Color.White,
+        unfocusedContainerColor = Color(0xFFF7F5FC),
+        focusedBorderColor = colorScheme.primary,
+        unfocusedBorderColor = colorScheme.outlineVariant,
+        focusedLabelColor = colorScheme.primary,
+        unfocusedLabelColor = colorScheme.onSurfaceVariant,
+        focusedTextColor = colorScheme.onSurface,
+        unfocusedTextColor = colorScheme.onSurface,
+        cursorColor = colorScheme.primary
+    )
+    val customFieldShape = RoundedCornerShape(12.dp)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val headerIcon = when (mutationType) {
+                    "Uang Masuk" -> Icons.Default.AddCircle
+                    "Pindah Saldo" -> Icons.Default.SwapHoriz
+                    else -> Icons.Default.RemoveCircle
+                }
+                val headerColor = when (mutationType) {
+                    "Uang Masuk" -> Color(0xFF2E7D32)
+                    "Pindah Saldo" -> Color(0xFF6B46C1)
+                    else -> Color(0xFFC62828)
+                }
+                Icon(
+                    imageVector = headerIcon,
+                    contentDescription = null,
+                    tint = headerColor,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = when (mutationType) {
+                        "Uang Masuk" -> "Input Uang Masuk"
+                        "Pindah Saldo" -> "Pindah Saldo / Mutasi"
+                        else -> "Input Uang Keluar (Pengeluaran)"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // 1. Tanggal
+                OutlinedTextField(
+                    value = tanggal,
+                    onValueChange = { tanggal = it },
+                    label = { Text("Tanggal (YYYY-MM-DD)") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDatePicker() }
+                        .testTag("dialog_mutation_tanggal"),
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable { showDatePicker() }
+                        )
+                    },
+                    colors = customFieldColors,
+                    shape = customFieldShape,
+                    singleLine = true
+                )
+
+                // 2. Jenis Mutasi Selector (Filter Chips)
+                Column {
+                    Text(
+                        "Jenis Mutasi",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        ElevatedFilterChip(
+                            selected = mutationType == "Uang Keluar",
+                            onClick = { mutationType = "Uang Keluar" },
+                            label = { Text("Keluar", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1f).testTag("dialog_chip_keluar"),
+                            leadingIcon = if (mutationType == "Uang Keluar") {
+                                { Icon(Icons.Default.RemoveCircle, contentDescription = null, tint = Color(0xFFC62828), modifier = Modifier.size(12.dp)) }
+                            } else null
+                        )
+                        ElevatedFilterChip(
+                            selected = mutationType == "Uang Masuk",
+                            onClick = { mutationType = "Uang Masuk" },
+                            label = { Text("Masuk", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1f).testTag("dialog_chip_masuk"),
+                            leadingIcon = if (mutationType == "Uang Masuk") {
+                                { Icon(Icons.Default.AddCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(12.dp)) }
+                            } else null
+                        )
+                        ElevatedFilterChip(
+                            selected = mutationType == "Pindah Saldo",
+                            onClick = { mutationType = "Pindah Saldo" },
+                            label = { Text("Mutasi", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1f).testTag("dialog_chip_transfer"),
+                            leadingIcon = if (mutationType == "Pindah Saldo") {
+                                { Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = colorScheme.primary, modifier = Modifier.size(12.dp)) }
+                            } else null
+                        )
+                    }
+                }
+
+                // 3. Akun Selector with Live Balance Badges
+                val sourceAccount = accounts.getOrNull(selectedSourceAccountIndex) ?: accounts.firstOrNull()
+                val targetAccount = accounts.getOrNull(selectedTargetAccountIndex) ?: accounts.getOrNull(1) ?: accounts.firstOrNull()
+                val currentAccount = accounts.getOrNull(selectedAccountIndex) ?: accounts.firstOrNull()
+
+                val sourceBalance = sourceAccount?.let { accountBalances[it.idAkun] } ?: 0.0
+                val targetBalance = targetAccount?.let { accountBalances[it.idAkun] } ?: 0.0
+                val currentBalance = currentAccount?.let { accountBalances[it.idAkun] } ?: 0.0
+
+                if (accounts.isNotEmpty()) {
+                    if (mutationType == "Pindah Saldo" && sourceAccount != null && targetAccount != null) {
+                        // Dompet Asal
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = sourceAccount.namaAkun,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Dompet Asal (Dikurangi)") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { sourceDropdownExpanded = true }
+                                        .testTag("dialog_mutation_asal"),
+                                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { sourceDropdownExpanded = !sourceDropdownExpanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                        }
+                                    },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape
+                                )
+
+                                DropdownMenu(
+                                    expanded = sourceDropdownExpanded,
+                                    onDismissRequest = { sourceDropdownExpanded = false }
+                                ) {
+                                    accounts.forEachIndexed { index, account ->
+                                        val bal = accountBalances[account.idAkun] ?: 0.0
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(account.namaAkun, fontWeight = FontWeight.Medium)
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        formatRupiah(bal),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (bal < 0) Color(0xFFDC2626) else colorScheme.primary
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedSourceAccountIndex = index
+                                                sourceDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            AccountBalanceBadge(
+                                label = "Saldo Tersedia (${sourceAccount.namaAkun}):",
+                                balance = sourceBalance,
+                                tintColor = Color(0xFFDC2626)
+                            )
+                        }
+
+                        // Dompet Tujuan
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = targetAccount.namaAkun,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Dompet Tujuan (Ditambah)") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { targetDropdownExpanded = true }
+                                        .testTag("dialog_mutation_tujuan"),
+                                    leadingIcon = { Icon(Icons.Default.FolderSpecial, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { targetDropdownExpanded = !targetDropdownExpanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                        }
+                                    },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape
+                                )
+
+                                DropdownMenu(
+                                    expanded = targetDropdownExpanded,
+                                    onDismissRequest = { targetDropdownExpanded = false }
+                                ) {
+                                    accounts.forEachIndexed { index, account ->
+                                        val bal = accountBalances[account.idAkun] ?: 0.0
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(account.namaAkun, fontWeight = FontWeight.Medium)
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        formatRupiah(bal),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (bal < 0) Color(0xFFDC2626) else Color(0xFF16A34A)
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedTargetAccountIndex = index
+                                                targetDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            AccountBalanceBadge(
+                                label = "Saldo Saat Ini (${targetAccount.namaAkun}):",
+                                balance = targetBalance,
+                                tintColor = Color(0xFF16A34A)
+                            )
+                        }
+                    } else if (currentAccount != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = currentAccount.namaAkun,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Pilih Pos Akun Saldo") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { accountDropdownExpanded = true }
+                                        .testTag("dialog_mutation_akun"),
+                                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { accountDropdownExpanded = !accountDropdownExpanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                        }
+                                    },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape
+                                )
+
+                                DropdownMenu(
+                                    expanded = accountDropdownExpanded,
+                                    onDismissRequest = { accountDropdownExpanded = false }
+                                ) {
+                                    accounts.forEachIndexed { index, account ->
+                                        val bal = accountBalances[account.idAkun] ?: 0.0
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(account.namaAkun, fontWeight = FontWeight.Medium)
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        formatRupiah(bal),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (bal < 0) Color(0xFFDC2626) else colorScheme.primary
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedAccountIndex = index
+                                                accountDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            AccountBalanceBadge(
+                                label = "Saldo Tersedia (${currentAccount.namaAkun}):",
+                                balance = currentBalance,
+                                tintColor = if (mutationType == "Uang Keluar") Color(0xFFDC2626) else Color(0xFF16A34A)
+                            )
+                        }
+                    }
+                }
+
+                // 4. Nominal Mutasi + Real-Time Simulation
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(
+                        value = nominalText,
+                        onValueChange = { nominalText = it; showErrorAlert = false },
+                        label = { Text("Nominal Mutasi (Rp)") },
+                        placeholder = { Text("Contoh: 50.000 atau 150000") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("dialog_mutation_nominal"),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        leadingIcon = { Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        colors = customFieldColors,
+                        shape = customFieldShape,
+                        singleLine = true
+                    )
+
+                    val parsedNominal = parseDoubleInput(nominalText) ?: 0.0
+                    EstimatedBalanceSimulationCard(
+                        mutationType = mutationType,
+                        currentBalance = if (mutationType == "Pindah Saldo") sourceBalance else currentBalance,
+                        nominal = parsedNominal,
+                        sourceName = if (mutationType == "Pindah Saldo") (sourceAccount?.namaAkun ?: "") else (currentAccount?.namaAkun ?: ""),
+                        targetName = if (mutationType == "Pindah Saldo") (targetAccount?.namaAkun ?: "") else "",
+                        targetBalance = targetBalance
+                    )
+                }
+
+                // 5. Keterangan Mutasi
+                OutlinedTextField(
+                    value = keterangan,
+                    onValueChange = { keterangan = it; showErrorAlert = false },
+                    label = { Text("Keterangan Mutasi") },
+                    placeholder = { Text("Contoh: Beli bahan, Pembayaran operasional, Pindah saldo") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_mutation_keterangan"),
+                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    colors = customFieldColors,
+                    shape = customFieldShape,
+                    singleLine = false,
+                    maxLines = 2
+                )
+
+                if (showErrorAlert) {
+                    val errText = if (mutationType == "Pindah Saldo" && selectedSourceAccountIndex == selectedTargetAccountIndex) {
+                        "Dompet asal dan tujuan tidak boleh sama!"
+                    } else {
+                        "Harap isi nominal angka dengan valid (> 0) dan keterangan!"
+                    }
+                    Text(
+                        text = errText,
+                        color = colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val nominal = parseDoubleInput(nominalText)
+                    val now = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                    if (mutationType == "Pindah Saldo") {
+                        val srcAcc = accounts.getOrNull(selectedSourceAccountIndex)
+                        val tgtAcc = accounts.getOrNull(selectedTargetAccountIndex)
+                        if (srcAcc != null && tgtAcc != null && nominal != null && nominal > 0.0 && keterangan.isNotBlank()) {
+                            if (srcAcc.idAkun == tgtAcc.idAkun) {
+                                showErrorAlert = true
+                                return@Button
+                            }
+                            viewModel.insertMutation(
+                                tanggal = tanggal,
+                                idAkun = srcAcc.idAkun,
+                                jenis = "Pindah Saldo",
+                                nominal = nominal,
+                                keterangan = keterangan,
+                                idAkunTujuan = tgtAcc.idAkun,
+                                waktu = now
+                            )
+                            Toast.makeText(context, "Mutasi kas berhasil disimpan!", Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                        } else {
+                            showErrorAlert = true
+                        }
+                    } else {
+                        val selectedAccount = accounts.getOrNull(selectedAccountIndex)
+                        if (selectedAccount != null && nominal != null && nominal > 0.0 && keterangan.isNotBlank()) {
+                            viewModel.insertMutation(
+                                tanggal = tanggal,
+                                idAkun = selectedAccount.idAkun,
+                                jenis = mutationType,
+                                nominal = nominal,
+                                keterangan = keterangan,
+                                waktu = now
+                            )
+                            Toast.makeText(context, "Mutasi kas berhasil disimpan!", Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                        } else {
+                            showErrorAlert = true
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(100.dp),
+                modifier = Modifier.testTag("dialog_submit_mutation_button")
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Simpan Mutasi", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        }
+    )
+}
+}
+
 @Composable
 fun DompetScreen(
     rows: List<AccountDashboardRow>,
@@ -3690,7 +4249,8 @@ fun WalletEnvelopesSection(
     viewModel: FinanceViewModel
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    var activeWalletToDebit by remember { mutableStateOf<AccountDashboardRow?>(null) }
+    val allAccounts by viewModel.allAccounts.collectAsStateWithLifecycle(emptyList())
+    var activeQuickMutation by remember { mutableStateOf<QuickMutationConfig?>(null) }
     var selectedPosKasDetail by remember { mutableStateOf<AccountDashboardRow?>(null) }
 
     Card(
@@ -3713,7 +4273,7 @@ fun WalletEnvelopesSection(
                         color = colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Alokasi otomatis & potong saldo pengeluaran (Klik untuk detail & aksi cepat)",
+                        text = "Alokasi otomatis & aksi cepat mutasi/pengeluaran",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.outline
                     )
@@ -3773,77 +4333,143 @@ fun WalletEnvelopesSection(
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(0.8.dp, colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .background(avatarBg, CircleShape),
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = null,
-                                        tint = avatarTint,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .background(avatarBg, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = avatarTint,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    Column {
+                                        Text(
+                                            text = row.namaAkun.replace("Dompet ", "", ignoreCase = true),
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Alokasi: ${formatRupiah(row.saldoTerplotting)} â€¢ Mutasi: ${if (row.mutasiPenyesuain >= 0) "+" else ""}${formatRupiah(row.mutasiPenyesuain)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        )
+                                    }
                                 }
 
-                                Column {
-                                    Text(
-                                        text = row.namaAkun.replace("Dompet ", "", ignoreCase = true),
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "Alokasi: ${formatRupiah(row.saldoTerplotting)} â€¢ Mutasi: ${if (row.mutasiPenyesuain >= 0) "+" else ""}${formatRupiah(row.mutasiPenyesuain)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
-
-                            Column(
-                                horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
                                 Text(
                                     text = formatRupiah(row.sisaSaldoRiil),
                                     fontWeight = FontWeight.ExtraBold,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = if (row.sisaSaldoRiil >= 0.0) Color(0xFF2E7D32) else Color(0xFFC62828)
                                 )
+                            }
 
-                                Button(
-                                    onClick = { activeWalletToDebit = row },
+                            // Quick Action Buttons (Masuk, Keluar, Mutasi)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                // 1. Masuk
+                                Surface(
                                     modifier = Modifier
+                                        .weight(1f)
                                         .height(28.dp)
-                                        .testTag("btn_debit_${row.namaAkun.replace(" ", "_").lowercase()}"),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    shape = RoundedCornerShape(100.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = colorScheme.primaryContainer,
-                                        contentColor = colorScheme.onPrimaryContainer
-                                    )
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            activeQuickMutation = QuickMutationConfig(
+                                                type = "Uang Masuk",
+                                                accountId = row.idAkun
+                                            )
+                                        }
+                                        .testTag("btn_quick_masuk_${row.namaAkun.replace(" ", "_").lowercase()}"),
+                                    color = Color(0xFFE8F5E9),
+                                    shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.RemoveCircleOutline,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Debet", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.AddCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("Masuk", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                    }
+                                }
+
+                                // 2. Keluar
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(28.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            activeQuickMutation = QuickMutationConfig(
+                                                type = "Uang Keluar",
+                                                accountId = row.idAkun
+                                            )
+                                        }
+                                        .testTag("btn_quick_keluar_${row.namaAkun.replace(" ", "_").lowercase()}"),
+                                    color = Color(0xFFFFEBEE),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.RemoveCircle, contentDescription = null, tint = Color(0xFFC62828), modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("Keluar", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                                    }
+                                }
+
+                                // 3. Mutasi (Pindah Saldo)
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(28.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            activeQuickMutation = QuickMutationConfig(
+                                                type = "Pindah Saldo",
+                                                accountId = row.idAkun
+                                            )
+                                        }
+                                        .testTag("btn_quick_transfer_${row.namaAkun.replace(" ", "_").lowercase()}"),
+                                    color = colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = colorScheme.onPrimaryContainer, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("Mutasi", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = colorScheme.onPrimaryContainer)
+                                    }
                                 }
                             }
                         }
@@ -3853,158 +4479,20 @@ fun WalletEnvelopesSection(
         }
     }
 
-    // Modal/Dialog Form Pengeluaran
-    activeWalletToDebit?.let { wallet ->
-        var nominalStr by remember { mutableStateOf("") }
-        var descriptionStr by remember { mutableStateOf("") }
-        var errorMessage by remember { mutableStateOf<String?>(null) }
-        val context = LocalContext.current
-
-        AlertDialog(
-            onDismissRequest = { activeWalletToDebit = null },
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.RemoveCircle,
-                        contentDescription = null,
-                        tint = Color(0xFFC62828),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = "Debet ${wallet.namaAkun}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Saldo saat ini: ${formatRupiah(wallet.sisaSaldoRiil)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colorScheme.onSurfaceVariant
-                    )
-
-                    OutlinedTextField(
-                        value = nominalStr,
-                        onValueChange = {
-                            nominalStr = it
-                            errorMessage = null
-                        },
-                        label = { Text("Nominal Pengeluaran (Rp)") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_wallet_expense_nominal"),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color(0xFFF7F5FC),
-                            focusedBorderColor = colorScheme.primary,
-                            unfocusedBorderColor = colorScheme.outlineVariant,
-                            focusedLabelColor = colorScheme.primary,
-                            unfocusedLabelColor = colorScheme.onSurfaceVariant,
-                            focusedTextColor = colorScheme.onSurface,
-                            unfocusedTextColor = colorScheme.onSurface,
-                            cursorColor = colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = descriptionStr,
-                        onValueChange = {
-                            descriptionStr = it
-                            errorMessage = null
-                        },
-                        label = { Text("Keterangan Pengeluaran") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_wallet_expense_keterangan"),
-                        placeholder = { Text("Contoh: Beli kemasan baru, Bayar token") },
-                        singleLine = false,
-                        maxLines = 2,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color(0xFFF7F5FC),
-                            focusedBorderColor = colorScheme.primary,
-                            unfocusedBorderColor = colorScheme.outlineVariant,
-                            focusedLabelColor = colorScheme.primary,
-                            unfocusedLabelColor = colorScheme.onSurfaceVariant,
-                            focusedTextColor = colorScheme.onSurface,
-                            unfocusedTextColor = colorScheme.onSurface,
-                            cursorColor = colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    errorMessage?.let { error ->
-                        Text(
-                            text = error,
-                            color = colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val amount = parseDoubleInput(nominalStr)
-                        if (amount == null || amount <= 0.0) {
-                            errorMessage = "Harap masukkan nominal angka yang valid!"
-                            return@Button
-                        }
-                        if (descriptionStr.isBlank()) {
-                            errorMessage = "Harap isi keterangan pengeluaran!"
-                            return@Button
-                        }
-
-                        // Save "Uang Keluar" mutation (negative adjustment on real-time balance)
-                        viewModel.insertMutation(
-                            tanggal = viewModel.getTodayString(),
-                            idAkun = wallet.idAkun,
-                            jenis = "Uang Keluar",
-                            nominal = amount,
-                            keterangan = descriptionStr
-                        )
-
-                        Toast.makeText(context, "Berhasil memotong saldo ${wallet.namaAkun}!", Toast.LENGTH_SHORT).show()
-                        activeWalletToDebit = null
-                    },
-                    modifier = Modifier.testTag("btn_submit_wallet_expense"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFC62828),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(100.dp)
-                ) {
-                    Text("Potong Saldo", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { activeWalletToDebit = null }
-                ) {
-                    Text("Batal")
-                }
-            }
+    if (activeQuickMutation != null) {
+        QuickMutationDialog(
+            initialType = activeQuickMutation!!.type,
+            initialAccountId = activeQuickMutation!!.accountId,
+            accounts = allAccounts,
+            viewModel = viewModel,
+            onDismiss = { activeQuickMutation = null }
         )
     }
 
-    selectedPosKasDetail?.let { row ->
+    if (selectedPosKasDetail != null) {
         DetailLedgerDialog(
-            account = row,
+            account = selectedPosKasDetail!!,
             viewModel = viewModel,
-            showQuickActions = true,
             onDismiss = { selectedPosKasDetail = null }
         )
     }
@@ -5169,6 +5657,9 @@ fun MutationsTab(
     viewModel: FinanceViewModel
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val summary by viewModel.dashboardSummary.collectAsStateWithLifecycle()
+    val accountBalances = remember(summary) { summary.rows.associate { it.idAkun to it.sisaSaldoRiil } }
+
     val customFieldColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = Color.White,
         unfocusedContainerColor = Color(0xFFF7F5FC),
@@ -5235,131 +5726,7 @@ fun MutationsTab(
                         singleLine = true
                     )
 
-                    // Account Selection Dropdown
-                    if (accounts.isNotEmpty()) {
-                        if (mutationType == "Pindah Saldo") {
-                            var sourceDropdownExpanded by remember { mutableStateOf(false) }
-                            var targetDropdownExpanded by remember { mutableStateOf(false) }
-                            val sourceAccount = accounts.getOrNull(selectedSourceAccountIndex) ?: accounts.first()
-                            val targetAccount = accounts.getOrNull(selectedTargetAccountIndex) ?: accounts.getOrNull(1) ?: accounts.first()
-
-                            // Dompet Asal
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                OutlinedTextField(
-                                    value = sourceAccount.namaAkun,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Pilih Dompet Asal (Dikurangi)") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { sourceDropdownExpanded = true }
-                                        .testTag("input_mutation_asal"),
-                                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                                    trailingIcon = {
-                                        IconButton(onClick = { sourceDropdownExpanded = !sourceDropdownExpanded }) {
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                        }
-                                    },
-                                    colors = customFieldColors,
-                                    shape = customFieldShape
-                                )
-
-                                DropdownMenu(
-                                    expanded = sourceDropdownExpanded,
-                                    onDismissRequest = { sourceDropdownExpanded = false },
-                                    modifier = Modifier.fillMaxWidth(0.9f)
-                                ) {
-                                    accounts.forEachIndexed { index, account ->
-                                        DropdownMenuItem(
-                                            text = { Text(account.namaAkun) },
-                                            onClick = {
-                                                selectedSourceAccountIndex = index
-                                                sourceDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            // Dompet Tujuan
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                OutlinedTextField(
-                                    value = targetAccount.namaAkun,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Pilih Dompet Tujuan (Ditambah)") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { targetDropdownExpanded = true }
-                                        .testTag("input_mutation_tujuan"),
-                                    leadingIcon = { Icon(Icons.Default.FolderSpecial, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                                    trailingIcon = {
-                                        IconButton(onClick = { targetDropdownExpanded = !targetDropdownExpanded }) {
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                        }
-                                    },
-                                    colors = customFieldColors,
-                                    shape = customFieldShape
-                                )
-
-                                DropdownMenu(
-                                    expanded = targetDropdownExpanded,
-                                    onDismissRequest = { targetDropdownExpanded = false },
-                                    modifier = Modifier.fillMaxWidth(0.9f)
-                                ) {
-                                    accounts.forEachIndexed { index, account ->
-                                        DropdownMenuItem(
-                                            text = { Text(account.namaAkun) },
-                                            onClick = {
-                                                selectedTargetAccountIndex = index
-                                                targetDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            val currentAccount = accounts.getOrNull(selectedAccountIndex) ?: accounts.first()
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                OutlinedTextField(
-                                    value = currentAccount.namaAkun,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Pilih Pos Akun Saldo") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { accountDropdownExpanded = true }
-                                        .testTag("input_mutation_akun"),
-                                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                                    trailingIcon = {
-                                        IconButton(onClick = { accountDropdownExpanded = !accountDropdownExpanded }) {
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                        }
-                                    },
-                                    colors = customFieldColors,
-                                    shape = customFieldShape
-                                )
-
-                                DropdownMenu(
-                                    expanded = accountDropdownExpanded,
-                                    onDismissRequest = { accountDropdownExpanded = false },
-                                    modifier = Modifier.fillMaxWidth(0.9f)
-                                ) {
-                                    accounts.forEachIndexed { index, account ->
-                                        DropdownMenuItem(
-                                            text = { Text(account.namaAkun) },
-                                            onClick = {
-                                                selectedAccountIndex = index
-                                                accountDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }                    // Jenis Mutasi Selector
+                    // Jenis Mutasi Selector
                     Column {
                         Text(
                             "Jenis Mutasi",
@@ -5408,19 +5775,230 @@ fun MutationsTab(
                         }
                     }
 
-                    OutlinedTextField(
-                        value = nominalText,
-                        onValueChange = { nominalText = it },
-                        label = { Text("Nominal Mutasi (Rp)") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_mutation_nominal"),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        leadingIcon = { Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        colors = customFieldColors,
-                        shape = customFieldShape,
-                        singleLine = true
-                    )
+                    // Account Selection with Live Balance Badges
+                    val sourceAccount = accounts.getOrNull(selectedSourceAccountIndex) ?: accounts.firstOrNull()
+                    val targetAccount = accounts.getOrNull(selectedTargetAccountIndex) ?: accounts.getOrNull(1) ?: accounts.firstOrNull()
+                    val currentAccount = accounts.getOrNull(selectedAccountIndex) ?: accounts.firstOrNull()
+
+                    val sourceBalance = sourceAccount?.let { accountBalances[it.idAkun] } ?: 0.0
+                    val targetBalance = targetAccount?.let { accountBalances[it.idAkun] } ?: 0.0
+                    val currentBalance = currentAccount?.let { accountBalances[it.idAkun] } ?: 0.0
+
+                    if (accounts.isNotEmpty()) {
+                        if (mutationType == "Pindah Saldo" && sourceAccount != null && targetAccount != null) {
+                            var sourceDropdownExpanded by remember { mutableStateOf(false) }
+                            var targetDropdownExpanded by remember { mutableStateOf(false) }
+
+                            // Dompet Asal
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = sourceAccount.namaAkun,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Pilih Dompet Asal (Dikurangi)") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { sourceDropdownExpanded = true }
+                                            .testTag("input_mutation_asal"),
+                                        leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { sourceDropdownExpanded = !sourceDropdownExpanded }) {
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        },
+                                        colors = customFieldColors,
+                                        shape = customFieldShape
+                                    )
+
+                                    DropdownMenu(
+                                        expanded = sourceDropdownExpanded,
+                                        onDismissRequest = { sourceDropdownExpanded = false },
+                                        modifier = Modifier.fillMaxWidth(0.9f)
+                                    ) {
+                                        accounts.forEachIndexed { index, account ->
+                                            val bal = accountBalances[account.idAkun] ?: 0.0
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(account.namaAkun, fontWeight = FontWeight.Medium)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            formatRupiah(bal),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (bal < 0) Color(0xFFDC2626) else colorScheme.primary
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    selectedSourceAccountIndex = index
+                                                    sourceDropdownExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                AccountBalanceBadge(
+                                    label = "Saldo Tersedia (${sourceAccount.namaAkun}):",
+                                    balance = sourceBalance,
+                                    tintColor = Color(0xFFDC2626)
+                                )
+                            }
+
+                            // Dompet Tujuan
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = targetAccount.namaAkun,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Pilih Dompet Tujuan (Ditambah)") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { targetDropdownExpanded = true }
+                                            .testTag("input_mutation_tujuan"),
+                                        leadingIcon = { Icon(Icons.Default.FolderSpecial, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { targetDropdownExpanded = !targetDropdownExpanded }) {
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        },
+                                        colors = customFieldColors,
+                                        shape = customFieldShape
+                                    )
+
+                                    DropdownMenu(
+                                        expanded = targetDropdownExpanded,
+                                        onDismissRequest = { targetDropdownExpanded = false },
+                                        modifier = Modifier.fillMaxWidth(0.9f)
+                                    ) {
+                                        accounts.forEachIndexed { index, account ->
+                                            val bal = accountBalances[account.idAkun] ?: 0.0
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(account.namaAkun, fontWeight = FontWeight.Medium)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            formatRupiah(bal),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (bal < 0) Color(0xFFDC2626) else Color(0xFF16A34A)
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    selectedTargetAccountIndex = index
+                                                    targetDropdownExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                AccountBalanceBadge(
+                                    label = "Saldo Saat Ini (${targetAccount.namaAkun}):",
+                                    balance = targetBalance,
+                                    tintColor = Color(0xFF16A34A)
+                                )
+                            }
+                        } else if (currentAccount != null) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = currentAccount.namaAkun,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Pilih Pos Akun Saldo") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { accountDropdownExpanded = true }
+                                            .testTag("input_mutation_akun"),
+                                        leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { accountDropdownExpanded = !accountDropdownExpanded }) {
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        },
+                                        colors = customFieldColors,
+                                        shape = customFieldShape
+                                    )
+
+                                    DropdownMenu(
+                                        expanded = accountDropdownExpanded,
+                                        onDismissRequest = { accountDropdownExpanded = false },
+                                        modifier = Modifier.fillMaxWidth(0.9f)
+                                    ) {
+                                        accounts.forEachIndexed { index, account ->
+                                            val bal = accountBalances[account.idAkun] ?: 0.0
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(account.namaAkun, fontWeight = FontWeight.Medium)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            formatRupiah(bal),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (bal < 0) Color(0xFFDC2626) else colorScheme.primary
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    selectedAccountIndex = index
+                                                    accountDropdownExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                AccountBalanceBadge(
+                                    label = "Saldo Tersedia (${currentAccount.namaAkun}):",
+                                    balance = currentBalance,
+                                    tintColor = if (mutationType == "Uang Keluar") Color(0xFFDC2626) else Color(0xFF16A34A)
+                                )
+                            }
+                        }
+                    }
+
+                    // Nominal Mutasi + Simulation
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedTextField(
+                            value = nominalText,
+                            onValueChange = { nominalText = it },
+                            label = { Text("Nominal Mutasi (Rp)") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_mutation_nominal"),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            leadingIcon = { Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                            colors = customFieldColors,
+                            shape = customFieldShape,
+                            singleLine = true
+                        )
+
+                        val parsedNominal = parseDoubleInput(nominalText) ?: 0.0
+                        EstimatedBalanceSimulationCard(
+                            mutationType = mutationType,
+                            currentBalance = if (mutationType == "Pindah Saldo") sourceBalance else currentBalance,
+                            nominal = parsedNominal,
+                            sourceName = if (mutationType == "Pindah Saldo") (sourceAccount?.namaAkun ?: "") else (currentAccount?.namaAkun ?: ""),
+                            targetName = if (mutationType == "Pindah Saldo") (targetAccount?.namaAkun ?: "") else "",
+                            targetBalance = targetBalance
+                        )
+                    }
 
                     OutlinedTextField(
                         value = keterangan,
@@ -5455,20 +6033,20 @@ fun MutationsTab(
                         onClick = {
                             val nominal = parseDoubleInput(nominalText)
                             if (mutationType == "Pindah Saldo") {
-                                val sourceAccount = accounts.getOrNull(selectedSourceAccountIndex)
-                                val targetAccount = accounts.getOrNull(selectedTargetAccountIndex)
-                                if (sourceAccount != null && targetAccount != null && nominal != null && nominal > 0.0 && keterangan.isNotBlank()) {
-                                    if (sourceAccount.idAkun == targetAccount.idAkun) {
+                                val srcAcc = accounts.getOrNull(selectedSourceAccountIndex)
+                                val tgtAcc = accounts.getOrNull(selectedTargetAccountIndex)
+                                if (srcAcc != null && tgtAcc != null && nominal != null && nominal > 0.0 && keterangan.isNotBlank()) {
+                                    if (srcAcc.idAkun == tgtAcc.idAkun) {
                                         showErrorAlert = true
                                         return@Button
                                     }
                                     viewModel.insertMutation(
                                         tanggal = tanggal,
-                                        idAkun = sourceAccount.idAkun,
+                                        idAkun = srcAcc.idAkun,
                                         jenis = "Pindah Saldo",
                                         nominal = nominal,
                                         keterangan = keterangan,
-                                        idAkunTujuan = targetAccount.idAkun
+                                        idAkunTujuan = tgtAcc.idAkun
                                     )
                                     // Clear Form
                                     nominalText = ""
@@ -5591,6 +6169,7 @@ fun MutationsTab(
         EditMutationDialog(
             mutation = editingMutation!!,
             accounts = accounts,
+            viewModel = viewModel,
             onDismiss = { editingMutation = null },
             onSave = { updatedMutation ->
                 viewModel.updateMutation(updatedMutation)
@@ -5781,10 +6360,14 @@ fun MutationHistoryCard(
 fun EditMutationDialog(
     mutation: MutasiManualKeluarMasuk,
     accounts: List<MasterAkunSaldo>,
+    viewModel: FinanceViewModel? = null,
     onDismiss: () -> Unit,
     onSave: (MutasiManualKeluarMasuk) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val summary by viewModel?.dashboardSummary?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(null) }
+    val accountBalances = remember(summary) { summary?.rows?.associate { it.idAkun to it.sisaSaldoRiil } ?: emptyMap() }
+
     val customFieldColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = Color.White,
         unfocusedContainerColor = Color(0xFFF7F5FC),
@@ -5819,17 +6402,20 @@ fun EditMutationDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Icon(Icons.Default.Edit, contentDescription = null, tint = colorScheme.primary)
-                Text("Edit Mutasi Kas", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text("Edit Mutasi Manual Kas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         },
         text = {
             Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -5898,125 +6484,218 @@ fun EditMutationDialog(
                     }
                 }
 
+                val srcAcc = accounts.getOrNull(selectedSourceIdx) ?: accounts.firstOrNull()
+                val tgtAcc = accounts.getOrNull(selectedTargetIdx) ?: accounts.getOrNull(1) ?: accounts.firstOrNull()
+                val srcBal = srcAcc?.let { accountBalances[it.idAkun] } ?: 0.0
+                val tgtBal = tgtAcc?.let { accountBalances[it.idAkun] } ?: 0.0
+
                 if (accounts.isNotEmpty()) {
-                    if (editJenis == "Pindah Saldo") {
-                        val srcAcc = accounts.getOrNull(selectedSourceIdx) ?: accounts.first()
-                        val tgtAcc = accounts.getOrNull(selectedTargetIdx) ?: accounts.getOrNull(1) ?: accounts.first()
-
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = srcAcc.namaAkun,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Dompet Asal (Dikurangi)") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { sourceExpanded = true },
-                                trailingIcon = {
-                                    IconButton(onClick = { sourceExpanded = !sourceExpanded }) {
-                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                    }
-                                },
-                                colors = customFieldColors,
-                                shape = customFieldShape
-                            )
-                            DropdownMenu(
-                                expanded = sourceExpanded,
-                                onDismissRequest = { sourceExpanded = false }
-                            ) {
-                                accounts.forEachIndexed { idx, acc ->
-                                    DropdownMenuItem(
-                                        text = { Text(acc.namaAkun) },
-                                        onClick = {
-                                            selectedSourceIdx = idx
-                                            sourceExpanded = false
+                    if (editJenis == "Pindah Saldo" && srcAcc != null && tgtAcc != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = srcAcc.namaAkun,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Dompet Asal (Dikurangi)") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { sourceExpanded = true },
+                                    trailingIcon = {
+                                        IconButton(onClick = { sourceExpanded = !sourceExpanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                                         }
-                                    )
+                                    },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape
+                                )
+                                DropdownMenu(
+                                    expanded = sourceExpanded,
+                                    onDismissRequest = { sourceExpanded = false }
+                                ) {
+                                    accounts.forEachIndexed { idx, acc ->
+                                        val bal = accountBalances[acc.idAkun] ?: 0.0
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(acc.namaAkun)
+                                                    if (accountBalances.isNotEmpty()) {
+                                                        Text(
+                                                            formatRupiah(bal),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (bal < 0) Color(0xFFDC2626) else colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedSourceIdx = idx
+                                                sourceExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
+                            }
+                            if (accountBalances.isNotEmpty()) {
+                                AccountBalanceBadge(
+                                    label = "Saldo Tersedia (${srcAcc.namaAkun}):",
+                                    balance = srcBal,
+                                    tintColor = Color(0xFFDC2626)
+                                )
                             }
                         }
 
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = tgtAcc.namaAkun,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Dompet Tujuan (Ditambah)") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { targetExpanded = true },
-                                trailingIcon = {
-                                    IconButton(onClick = { targetExpanded = !targetExpanded }) {
-                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                    }
-                                },
-                                colors = customFieldColors,
-                                shape = customFieldShape
-                            )
-                            DropdownMenu(
-                                expanded = targetExpanded,
-                                onDismissRequest = { targetExpanded = false }
-                            ) {
-                                accounts.forEachIndexed { idx, acc ->
-                                    DropdownMenuItem(
-                                        text = { Text(acc.namaAkun) },
-                                        onClick = {
-                                            selectedTargetIdx = idx
-                                            targetExpanded = false
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = tgtAcc.namaAkun,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Dompet Tujuan (Ditambah)") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { targetExpanded = true },
+                                    trailingIcon = {
+                                        IconButton(onClick = { targetExpanded = !targetExpanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                                         }
-                                    )
+                                    },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape
+                                )
+                                DropdownMenu(
+                                    expanded = targetExpanded,
+                                    onDismissRequest = { targetExpanded = false }
+                                ) {
+                                    accounts.forEachIndexed { idx, acc ->
+                                        val bal = accountBalances[acc.idAkun] ?: 0.0
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(acc.namaAkun)
+                                                    if (accountBalances.isNotEmpty()) {
+                                                        Text(
+                                                            formatRupiah(bal),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (bal < 0) Color(0xFFDC2626) else Color(0xFF16A34A)
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedTargetIdx = idx
+                                                targetExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
+                            if (accountBalances.isNotEmpty()) {
+                                AccountBalanceBadge(
+                                    label = "Saldo Saat Ini (${tgtAcc.namaAkun}):",
+                                    balance = tgtBal,
+                                    tintColor = Color(0xFF16A34A)
+                                )
+                            }
                         }
-                    } else {
-                        val currAcc = accounts.getOrNull(selectedSourceIdx) ?: accounts.first()
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = currAcc.namaAkun,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Pos Akun Saldo") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { accountExpanded = true },
-                                trailingIcon = {
-                                    IconButton(onClick = { accountExpanded = !accountExpanded }) {
-                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                    }
-                                },
-                                colors = customFieldColors,
-                                shape = customFieldShape
-                            )
-                            DropdownMenu(
-                                expanded = accountExpanded,
-                                onDismissRequest = { accountExpanded = false }
-                            ) {
-                                accounts.forEachIndexed { idx, acc ->
-                                    DropdownMenuItem(
-                                        text = { Text(acc.namaAkun) },
-                                        onClick = {
-                                            selectedSourceIdx = idx
-                                            accountExpanded = false
+                    } else if (srcAcc != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = srcAcc.namaAkun,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Pos Akun Saldo") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { accountExpanded = true },
+                                    trailingIcon = {
+                                        IconButton(onClick = { accountExpanded = !accountExpanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                                         }
-                                    )
+                                    },
+                                    colors = customFieldColors,
+                                    shape = customFieldShape
+                                )
+                                DropdownMenu(
+                                    expanded = accountExpanded,
+                                    onDismissRequest = { accountExpanded = false }
+                                ) {
+                                    accounts.forEachIndexed { idx, acc ->
+                                        val bal = accountBalances[acc.idAkun] ?: 0.0
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(acc.namaAkun)
+                                                    if (accountBalances.isNotEmpty()) {
+                                                        Text(
+                                                            formatRupiah(bal),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (bal < 0) Color(0xFFDC2626) else colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedSourceIdx = idx
+                                                accountExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
+                            }
+                            if (accountBalances.isNotEmpty()) {
+                                AccountBalanceBadge(
+                                    label = "Saldo Tersedia (${srcAcc.namaAkun}):",
+                                    balance = srcBal,
+                                    tintColor = if (editJenis == "Uang Keluar") Color(0xFFDC2626) else Color(0xFF16A34A)
+                                )
                             }
                         }
                     }
                 }
 
-                OutlinedTextField(
-                    value = editNominalText,
-                    onValueChange = { editNominalText = it },
-                    label = { Text("Nominal Mutasi (Rp)") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("edit_mutation_nominal"),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = customFieldColors,
-                    shape = customFieldShape,
-                    singleLine = true
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(
+                        value = editNominalText,
+                        onValueChange = { editNominalText = it },
+                        label = { Text("Nominal Mutasi (Rp)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("edit_mutation_nominal"),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = customFieldColors,
+                        shape = customFieldShape,
+                        singleLine = true
+                    )
+
+                    val parsedNominal = parseDoubleInput(editNominalText) ?: 0.0
+                    if (accountBalances.isNotEmpty()) {
+                        EstimatedBalanceSimulationCard(
+                            mutationType = editJenis,
+                            currentBalance = srcBal,
+                            nominal = parsedNominal,
+                            sourceName = srcAcc?.namaAkun ?: "",
+                            targetName = if (editJenis == "Pindah Saldo") (tgtAcc?.namaAkun ?: "") else "",
+                            targetBalance = tgtBal
+                        )
+                    }
+                }
 
                 OutlinedTextField(
                     value = editKeterangan,
@@ -6082,6 +6761,7 @@ fun EditMutationDialog(
             }
         }
     )
+}
 }
 
 // ==========================================
@@ -7167,7 +7847,7 @@ fun DetailLedgerDialog(
     }
 
     var selectedDetailTab by remember { mutableIntStateOf(0) }
-    var quickActionType by remember { mutableStateOf<String?>(null) }
+    var activeQuickMutation by remember { mutableStateOf<QuickMutationConfig?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -7333,7 +8013,7 @@ fun DetailLedgerDialog(
                     ) {
                         // Masuk
                         Button(
-                            onClick = { quickActionType = "Masuk" },
+                            onClick = { activeQuickMutation = QuickMutationConfig("Uang Masuk", account.idAkun) },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("quick_btn_masuk_${cleanAccountName.lowercase()}"),
@@ -7355,7 +8035,7 @@ fun DetailLedgerDialog(
 
                         // Keluar
                         Button(
-                            onClick = { quickActionType = "Keluar" },
+                            onClick = { activeQuickMutation = QuickMutationConfig("Uang Keluar", account.idAkun) },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("quick_btn_keluar_${cleanAccountName.lowercase()}"),
@@ -7377,7 +8057,7 @@ fun DetailLedgerDialog(
 
                         // Mutasi / Transfer
                         Button(
-                            onClick = { quickActionType = "Transfer" },
+                            onClick = { activeQuickMutation = QuickMutationConfig("Pindah Saldo", account.idAkun) },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("quick_btn_transfer_${cleanAccountName.lowercase()}"),
@@ -7658,164 +8338,13 @@ fun DetailLedgerDialog(
         }
     }
 
-    if (quickActionType != null) {
-        var nominalInput by remember { mutableStateOf("") }
-        var keteranganInput by remember { mutableStateOf("") }
-        var selectedTargetAccId by remember { mutableIntStateOf(allAccounts.firstOrNull { it.idAkun != account.idAkun }?.idAkun ?: 0) }
-        var targetExpanded by remember { mutableStateOf(false) }
-        var quickError by remember { mutableStateOf<String?>(null) }
-        val context = LocalContext.current
-
-        AlertDialog(
-            onDismissRequest = { quickActionType = null },
-            title = {
-                Text(
-                    text = when (quickActionType) {
-                        "Masuk" -> "Tambah Dana Masuk - $cleanAccountName"
-                        "Keluar" -> "Catat Pengeluaran - $cleanAccountName"
-                        else -> "Pindah Saldo - $cleanAccountName"
-                    },
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (quickError != null) {
-                        Text(
-                            text = quickError!!,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    if (quickActionType == "Transfer") {
-                        Text(
-                            text = "Pos Kas Tujuan Transfer:",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        val targetAcc = allAccounts.find { it.idAkun == selectedTargetAccId }
-                        Box {
-                            OutlinedButton(
-                                onClick = { targetExpanded = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(targetAcc?.namaAkun ?: "Pilih Pos Tujuan")
-                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                }
-                            }
-                            DropdownMenu(
-                                expanded = targetExpanded,
-                                onDismissRequest = { targetExpanded = false }
-                            ) {
-                                allAccounts.filter { it.idAkun != account.idAkun }.forEach { acc ->
-                                    DropdownMenuItem(
-                                        text = { Text(acc.namaAkun) },
-                                        onClick = {
-                                            selectedTargetAccId = acc.idAkun
-                                            targetExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = nominalInput,
-                        onValueChange = { nominalInput = it; quickError = null },
-                        label = { Text("Nominal (Rp)") },
-                        placeholder = { Text("Misal: 275 atau 500.000") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_quick_action_nominal"),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = keteranganInput,
-                        onValueChange = { keteranganInput = it },
-                        label = { Text("Keterangan Mutasi") },
-                        placeholder = { Text("Catatan singkat mutasi") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_quick_action_keterangan"),
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val amt = parseDoubleInput(nominalInput)
-                        if (amt == null || amt <= 0.0) {
-                            quickError = "Harap masukkan nominal angka yang valid (> 0)"
-                            return@Button
-                        }
-
-                        val today = viewModel.getTodayString()
-                        val now = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-
-                        when (quickActionType) {
-                            "Masuk" -> {
-                                viewModel.insertMutation(
-                                    tanggal = today,
-                                    idAkun = account.idAkun,
-                                    jenis = "Uang Masuk",
-                                    nominal = amt,
-                                    keterangan = keteranganInput.ifBlank { "Tambah dana $cleanAccountName" },
-                                    waktu = now
-                                )
-                                Toast.makeText(context, "Berhasil menambah dana $cleanAccountName!", Toast.LENGTH_SHORT).show()
-                            }
-                            "Keluar" -> {
-                                viewModel.insertMutation(
-                                    tanggal = today,
-                                    idAkun = account.idAkun,
-                                    jenis = "Uang Keluar",
-                                    nominal = amt,
-                                    keterangan = keteranganInput.ifBlank { "Pengeluaran $cleanAccountName" },
-                                    waktu = now
-                                )
-                                Toast.makeText(context, "Berhasil mencatat pengeluaran $cleanAccountName!", Toast.LENGTH_SHORT).show()
-                            }
-                            "Transfer" -> {
-                                val targetAcc = allAccounts.find { it.idAkun == selectedTargetAccId }
-                                if (targetAcc == null || targetAcc.idAkun == account.idAkun) {
-                                    quickError = "Pilih pos kas tujuan yang berbeda"
-                                    return@Button
-                                }
-                                viewModel.insertMutation(
-                                    tanggal = today,
-                                    idAkun = account.idAkun,
-                                    jenis = "Pindah Saldo",
-                                    nominal = amt,
-                                    keterangan = keteranganInput.ifBlank { "Mutasi $cleanAccountName ke ${targetAcc.namaAkun}" },
-                                    idAkunTujuan = targetAcc.idAkun,
-                                    waktu = now
-                                )
-                                Toast.makeText(context, "Pindah saldo ke ${targetAcc.namaAkun} berhasil!", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        quickActionType = null
-                    }
-                ) {
-                    Text("Simpan Mutasi")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { quickActionType = null }) {
-                    Text("Batal")
-                }
-            }
+    if (activeQuickMutation != null) {
+        QuickMutationDialog(
+            initialType = activeQuickMutation!!.type,
+            initialAccountId = activeQuickMutation!!.accountId,
+            accounts = allAccounts,
+            viewModel = viewModel,
+            onDismiss = { activeQuickMutation = null }
         )
     }
 }
@@ -9697,735 +10226,78 @@ fun BackupRestoreTab(viewModel: FinanceViewModel) {
         if (backupsList.isEmpty()) {
             Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White
-                ),
-                border = BorderStroke(1.dp, Color(0xFFE4DAF7))
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFFF3EEFA)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CloudOff,
-                                contentDescription = "No Backup",
-                                modifier = Modifier.size(32.dp),
-                                tint = Color(0xFF6A4C93).copy(alpha = 0.6f)
-                            )
-                        }
-                        Text(
-                            text = "Belum ada riwayat cadangan lokal.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF554B6E),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(backupsList) { item ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("backup_item_${item.name}"),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color.White
-                        ),
-                        border = BorderStroke(1.dp, Color(0xFFE4DAF7)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(Color(0xFFF3EEFA)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Backup,
-                                        contentDescription = "JSON Backup",
-                                        tint = Color(0xFF6A4C93),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = item.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF3B2369),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "${String.format(Locale.US, "%.1f", item.sizeKb)} KB",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF554B6E)
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .size(4.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFFE4DAF7))
-                                        )
-                                        Text(
-                                            text = item.dateFormatted,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF554B6E)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(
-                                    onClick = { fileToRestoreDirectly = item },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Restore,
-                                        contentDescription = "Pulihkan",
-                                        tint = Color(0xFF6A4C93),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { shareBackupFile(context, item) },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "Bagikan",
-                                        tint = Color(0xFF6A4C93),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { fileToDelete = item },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Hapus",
-                                        tint = Color(0xFFD32F2F),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun shareBackupFile(context: android.content.Context, backupFile: BackupFile) {
-    try {
-        val file = java.io.File(backupFile.absolutePath)
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-            type = "application/json"
-            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(android.content.Intent.createChooser(intent, "Bagikan Cadangan"))
-    } catch (e: Exception) {
-        e.printStackTrace()
-        android.widget.Toast.makeText(context, "Gagal membagikan berkas: ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
-    }
-}
-
-// ==========================================
-// COMPONENT: PROFILE AVATAR
-// ==========================================
-@Composable
-fun ProfileAvatar(
-    userProfile: UserProfile,
-    size: Dp = 48.dp,
-    modifier: Modifier = Modifier
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val context = LocalContext.current
-
-    Surface(
-        shape = RoundedCornerShape(size / 3),
-        color = when (userProfile.avatarType) {
-            "avatar_executive" -> Color(0xFF006A60)
-            "avatar_store" -> Color(0xFFB45309)
-            "avatar_finance" -> Color(0xFF15803D)
-            "avatar_badge" -> Color(0xFF6B21A8)
-            "avatar_person" -> Color(0xFFBE123C)
-            else -> colorScheme.primaryContainer
-        },
-        modifier = modifier.size(size)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            if (userProfile.avatarType == "custom" && userProfile.avatarUri.isNotBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(userProfile.avatarUri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Foto Profil ${userProfile.adminName}",
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                val icon = when (userProfile.avatarType) {
-                    "avatar_executive" -> Icons.Default.BusinessCenter
-                    "avatar_store" -> Icons.Default.Storefront
-                    "avatar_finance" -> Icons.Default.AccountBalance
-                    "avatar_badge" -> Icons.Default.Badge
-                    "avatar_person" -> Icons.Default.Person
-                    else -> Icons.Default.AdminPanelSettings
-                }
-                val tintColor = when (userProfile.avatarType) {
-                    "avatar_admin" -> colorScheme.primary
-                    else -> Color.White
-                }
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = tintColor,
-                    modifier = Modifier.size(size * 0.55f)
-                )
-            }
-        }
-    }
-}
-
-// ==========================================
-// SCREEN: MENU PROFIL ADMINISTRATOR
-// ==========================================
-@Composable
-fun ProfileScreen(
-    viewModel: FinanceViewModel,
-    onOpenLogin: () -> Unit = {}
-) {
-    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
-    val isGuest by viewModel.isGuest.collectAsStateWithLifecycle()
-    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
-    val colorScheme = MaterialTheme.colorScheme
-    val context = LocalContext.current
-
-    var adminNameText by remember(userProfile.adminName) { mutableStateOf(userProfile.adminName) }
-    var taglineText by remember(userProfile.tagline) { mutableStateOf(userProfile.tagline) }
-    var selectedAvatarType by remember(userProfile.avatarType) { mutableStateOf(userProfile.avatarType) }
-    var customUriString by remember(userProfile.avatarUri) { mutableStateOf(userProfile.avatarUri) }
-    var isSaved by remember { mutableStateOf(false) }
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: android.net.Uri? ->
-        uri?.let {
-            customUriString = it.toString()
-            selectedAvatarType = "custom"
-            isSaved = false
-        }
-    }
-
-    val customFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = colorScheme.primary,
-        unfocusedBorderColor = colorScheme.outlineVariant,
-        focusedContainerColor = colorScheme.surface,
-        unfocusedContainerColor = colorScheme.surface
-    )
-    val customFieldShape = RoundedCornerShape(16.dp)
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Main Profile Header Card
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("profile_card_header"),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                border = BorderStroke(1.dp, colorScheme.outlineVariant)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    val previewProfile = UserProfile(
-                        adminName = adminNameText,
-                        tagline = taglineText,
-                        avatarType = selectedAvatarType,
-                        avatarUri = customUriString
-                    )
-
-                    ProfileAvatar(
-                        userProfile = previewProfile,
-                        size = 80.dp,
-                        modifier = Modifier.testTag("profile_avatar_preview")
-                    )
-
-                    Text(
-                        text = adminNameText.ifBlank { "PGD Order" },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Surface(
-                        color = colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = taglineText.ifBlank { "Pradipta Graha Digital" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colorScheme.onPrimaryContainer,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-        }
-
-        // Section: Opsi Foto Profil
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                border = BorderStroke(1.dp, colorScheme.outlineVariant)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "FOTO PROFIL ADMINISTRATOR",
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onSurfaceVariant
-                    )
-
-                    OutlinedButton(
-                        onClick = { imagePickerLauncher.launch("image/*") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("button_pick_image"),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pilih Foto dari Galeri (Image Picker)")
-                    }
-
-                    Text(
-                        text = "Atau Pilih Avatar Preset:",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colorScheme.onSurfaceVariant
-                    )
-
-                    val presets = listOf(
-                        "avatar_admin" to "Admin",
-                        "avatar_executive" to "Direktur",
-                        "avatar_store" to "Toko",
-                        "avatar_finance" to "Keuangan",
-                        "avatar_badge" to "Manajer",
-                        "avatar_person" to "Personal"
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        presets.take(3).forEach { (type, label) ->
-                            val isSelected = selectedAvatarType == type
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    selectedAvatarType = type
-                                    isSaved = false
-                                },
-                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("chip_avatar_$type"),
-                                leadingIcon = if (isSelected) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                                } else null
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        presets.drop(3).forEach { (type, label) ->
-                            val isSelected = selectedAvatarType == type
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    selectedAvatarType = type
-                                    isSaved = false
-                                },
-                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("chip_avatar_$type"),
-                                leadingIcon = if (isSelected) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                                } else null
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Section: Form Details
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                border = BorderStroke(1.dp, colorScheme.outlineVariant)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "IDENTITAS PENGELOLA",
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onSurfaceVariant
-                    )
-
-                    OutlinedTextField(
-                        value = adminNameText,
-                        onValueChange = {
-                            adminNameText = it
-                            isSaved = false
-                        },
-                        label = { Text("Nama Administrator") },
-                        placeholder = { Text("Contoh: PGD Order / Budi Santoso") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_profile_name"),
-                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        colors = customFieldColors,
-                        shape = customFieldShape,
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = taglineText,
-                        onValueChange = {
-                            taglineText = it
-                            isSaved = false
-                        },
-                        label = { Text("Quotes / Tagline") },
-                        placeholder = { Text("Contoh: Kelola Keuangan Lebih Bijak") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_profile_tagline"),
-                        leadingIcon = { Icon(Icons.Default.FormatQuote, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        colors = customFieldColors,
-                        shape = customFieldShape,
-                        singleLine = true
-                    )
-
-                    if (isSaved) {
-                        Surface(
-                            color = Color(0xFFE8F5E9),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Data profil berhasil disimpan permanen!",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFF1B5E20),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            viewModel.saveUserProfile(
-                                adminName = adminNameText,
-                                tagline = taglineText,
-                                avatarType = selectedAvatarType,
-                                avatarUri = customUriString
-                            )
-                            isSaved = true
-                            Toast.makeText(context, "Profil Administrator Diperbarui!", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("submit_profile_button"),
-                        shape = RoundedCornerShape(26.dp)
-                    ) {
-                        Icon(Icons.Default.Save, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "SIMPAN PERUBAHAN PROFIL",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================
-// MENU KHUSUS: ORDER NOTA (KALKULATOR & HISTORI)
-// ==========================================
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun OrderNotaScreen(
-    viewModel: FinanceViewModel,
-    orders: List<TransaksiOrderMasuk>,
-    accounts: List<MasterAkunSaldo>
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Form Kalkulator & Input Order, 1: Riwayat Pesanan Nota
-
-    val customFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = Color.White,
-        unfocusedContainerColor = Color(0xFFF7F5FC),
-        focusedBorderColor = colorScheme.primary,
-        unfocusedBorderColor = colorScheme.outlineVariant,
-        focusedLabelColor = colorScheme.primary,
-        unfocusedLabelColor = colorScheme.onSurfaceVariant,
-        focusedTextColor = colorScheme.onSurface,
-        unfocusedTextColor = colorScheme.onSurface,
-        cursorColor = colorScheme.primary
-    )
-    val customFieldShape = RoundedCornerShape(12.dp)
-
-    // Master settings rates prefilled from database
-    val kertasHppSys = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
-    val tintaHppSys = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
-    val pengemasanHppSys = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
-    val wastePctSys = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
-    val tenagaKerjaPctSys = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
-    val listrikPctSys = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
-    val maintenancePctSys = accounts.find { it.namaAkun == "Maintenance Alat" || it.namaAkun == "Dompet Maintenance" }?.persentaseOperasional?.toDouble() ?: 0.05
-
-    // Component HPP Inputs (allowing 0 - Standar Nota Paket: Kertas 120.000, Pengemasan 24.000)
-    var kertasHppText by remember(accounts) { mutableStateOf("120000") }
-    var tintaHppText by remember(accounts) { mutableStateOf("0") }
-    var pengemasanHppText by remember(accounts) { mutableStateOf("24000") }
-    var wastePctText by remember(accounts) { mutableStateOf(formatDouble(wastePctSys * 100)) }
-    var tenagaKerjaPctText by remember(accounts) { mutableStateOf(formatDouble(tenagaKerjaPctSys * 100)) }
-    var listrikPctText by remember(accounts) { mutableStateOf(formatDouble(listrikPctSys * 100)) }
-    var maintenancePctText by remember(accounts) { mutableStateOf(formatDouble(maintenancePctSys * 100)) }
-
-    // Order detail inputs
-    var editingOrderId by remember { mutableStateOf<Int?>(null) }
-    var tanggal by remember { mutableStateOf(viewModel.getTodayString()) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var namaPesananText by remember { mutableStateOf("") }
-    var qtyOrderText by remember { mutableStateOf("") }
-    var satuanText by remember { mutableStateOf("Paket") }
-    var totalHargaJualText by remember { mutableStateOf("") }
-    var hargaSatuanText by remember { mutableStateOf("") }
-    var jumlahPlastikText by remember { mutableStateOf("") }
-    var isLunas by remember { mutableStateOf(true) }
-    var syncGlobalSettings by remember { mutableStateOf(false) }
-
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    val onEditOrder: (TransaksiOrderMasuk) -> Unit = { order ->
-        editingOrderId = order.idOrder
-        tanggal = order.tanggalOrder
-        namaPesananText = order.namaPesanan
-        qtyOrderText = order.qtyOrder.toString()
-        satuanText = if (order.satuan.isBlank()) "Paket" else order.satuan
-        hargaSatuanText = formatDouble(order.hargaSatuan)
-        totalHargaJualText = formatDouble(order.qtyOrder * order.hargaSatuan)
-        jumlahPlastikText = order.jumlahPlastikPengemasan.toString()
-        isLunas = (order.status == "Lunas")
-        errorMessage = null
-        selectedTab = 0
-    }
-
-    if (showDatePicker) {
-        OrderDatePickerDialog(
-            onDateSelected = { tanggal = it },
-            onDismiss = { showDatePicker = false }
-        )
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Tab Row Header (Slim UI)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 6.dp)
-                .background(colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            val tabs = listOf(
-                Pair("Kalkulasi Nota", Icons.Default.Calculate),
-                Pair("Riwayat Pesanan Nota", Icons.Default.ReceiptLong)
-            )
-            tabs.forEachIndexed { index, (title, icon) ->
-                val isSelected = selectedTab == index
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) colorScheme.primary else Color.Transparent)
-                        .clickable { selectedTab = index }
-                        .padding(horizontal = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = title,
-                            tint = if (isSelected) colorScheme.onPrimary else colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = title,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) colorScheme.onPrimary else colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-
-        Box(modifier = Modifier.weight(1f)) {
-            if (selectedTab == 0) {
-                // TAB 1: FORM KALKULATOR & INPUT ORDER
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    if (editingOrderId != null) {
-                        item {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("edit_mode_banner_card"),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                                shape = RoundedCornerShapexœì=ksÛ8’ßçW`|³yâÈ¯ØI|›™•d9ñù¯¥Lj«®*K´ÅEjùHâÍ¸ê~Ëı´û%×€ø@QgÖøXÙx5ºılílµÇóõïˆ¢]yşØòÉkÒeBß›Z­mxyƒœÑĞòmê'ÖÌj<Çó#ö÷Ü·gÔ¿]¯¿N¾*»¿ô>·”a›ycûÚf#=j½‡­=§ã±íŞ´¶Ÿã¢è¿wm;ÎıòÁ‡“–Æbb›x¾ı/Ï©Óñ}êŞÀr¹!ŒZúÔÌéÈêZágËrõ ~²üĞLÇ¾qcˆñßíücù¿Šgœ[%H­Á¦½=æcÔ›76pEÇİÛÖ¶&ŞÇ­ ¯ÚŸ-ûf¶¶¯õPEw1±<WEã7‚ö¡uM#'l÷Çv¨?9lğz+th#ß‡¶çÂTİÈqÌÀ„6[ór’à¹œ(ôp«l×òÍ:(ÚˆÀş—ÕÚÙ7:´úOö<'š¹›‡mh}	Í6ÛLÉ"¸yäÂ
-¨K]rî…”üÇ_-øhÓ;¤¾Çã»5³UÃvş¡,¬İQò¡İõœ±9´ ¼u¬ÜN‡·sïÆ§óÉm;´CÇÌ¨)accˆFFèï>¶š›ùşŠNˆo»#öq.öÓ¡ND{6‡¿#7Œ¦dfÍæ–EıÈ&!uç”Œ£¹cOi`·kl³rc®¼ñí=îü<¿mQg>¡ğæVûå&½Œ›şÓwZOê=…{ŞÂĞ„{nÏ±GS˜¦±HŸmAw ¸tFÅÀˆµ5# ÿoY÷õŞH9o©Cÿ+¬¨c‚¯hÕÂoÑÌ¡“‡¡=5¡‡&Lœ‘µ.…µa4}mCã Y¾ïù•ÄZï@¨çSıDù¯Å¿Ü}Wøõæ&ykQ¼;t©ä€ô¨?.|Ò­YÅêâ{ÕG±H40ÍÙ6ğ6v%$© =‚=öKkÓ´ØFökëËÑÑÑn¿ÔYWôPu‹ZÀê??ì½PÁ
-&ttşÒ‹Ü±Côa`ü²Å/u¥o«pXKš/Zìäş´¯'\7}0»ì(åEÃÎ$õ´ğİ£Î(rà„oTHÕ±¤¼ØöıÎóŞ«İõrw—Y}ü$V3á&tõÂñe‘/0Qô„Æ3à‡ÑLj3‚í(w¦w»;»û¯4/w+\ëDäA7&ß^\,áŒ @º¶Cm²µŞ&;@"ê…ŞŒ†vÀDK±Q®7³]`DS‹ÑÕ387ÔG¹ÔL¤ÌUH—ù•ßÛ{Şİï7µò÷ÅçÖOø¹”¶i“œx³¹çZ.éÄkŞêÚHù¶à¶=LfXÅ^«É»9/•…  ò¯L/ÁMSw’(t §_) ,p€Ì}äÅµŠÓZõ‰
-Ú›N?ş±5æ_÷¥§«YŒŠ½p2¾$+~iÈŠïq.£Ò}Ô¸şñ4®/µÕsÆŠÒ´ø5Œ\-ÉËØP!7s•PÌÍcæg›È05>+SÃ5§-x±Şkkõ®ğ]ï‹şÎ-cOÂÖ¾¢£éL´ux÷ÆÊ’eA;× õ0Úí­-=?ÕcLú§:yÉ¸bLà}—±Ê£Ö± ¼²&S:!ç\šmú8ôÊrÄ9Xˆ¹;ı‡»;MÛ,t?ÊGô72ŞÀNù$ëàØ2·ü h0,âÁß4 *Lv¼Å £â›o¼K~ƒ+™ÆT1´Çt
-OÜD.…_uï(MßOÊ¶ßäZp³„­ßÛWoçºz£àŞñŞµC „È?‚?¦àe(&èÒ¤w\ô#:Ù–£¸4Éíu"Ä¤)ĞL¼Ï†ş‰÷Ü_@o‚SD‹@|›v§Ñ/‡«•ñnyÂ ’Öå|q`}mİbµI»ZA8¤7­5ÛGáG×éÇÉ|ş‘OcÍÀv>µn¯<¸*½cb^
-OÒß´â'†·ìÎy"}lŸG³+Ë7è.¹z¢ ôflÛù¥Ó@Í!n¿Æ’  v¬S@> ú‘Õ ©¬F˜6€Ô2œFpzˆ ï¥Ù$1ZaE­!ÔDøÙç²P×ãóØd„òEè~‘@Ü–K†ûâoôW3ëRô_ÌJ÷Ü#ş/‹ûËá½9Îë‰l–?BÉğJKf3Ç/²wÇñĞ™„¼[Èà¤õ—õ¦$j†Ö&òğòWª"•‚ç¸Ö¸‰-z”‘µZL`?µ².Fá²Ò„giiâcˆ¾jb>
-?²¡?Ê*\*¶\zCáZõm ›óĞ–Æé!IÌ{Cípúˆ×*ßN6~dUZ->â„¾=màx§!-}´O9¸{;ÕbøG[áa³¬µÑĞIİQXÚÒx}¶ yo¸Í¦ñˆÙ*+cZõ~­íouŒ»OiHSa3…ï=:V=:V=TÇ*µM^GP2×Å.)CT@§:FMé‰L=QV£&Òõ<ÑÓã™­:VgIvÈ»©«¶¯/¥¬3•p¤õhÏÎÎ®^O-¦ ËÓ‹â)EÇ06‡b/}ËSèém¥¿XyÈ)wÏÑzèSÛ‘F¥Í¨ñ‹&…˜'ñ>Ó³.à6:äáäÎÄ_'†Y„z‰èS².k0‘IŒıkGèı;›Îél!ÆlXø),|`¯šÆdBëÒš|$b}š#–b†àä¥ ,T‘3'íÓ7w€ÍN€w°£waªŞä€½©Gº:!ÏxÔõÁ30¥srŞ»$èGºÑ4Z=±Ã5lÒ]Z#î½Ğ¸?ç™ü{xKa”}ÔÈI­†z¼„îÂˆçeÂíĞèm9B@ÏêÖ±²hË×É/dË‹Ÿş•Ihâ¡]9š­6ó¶¯Iû3Ù"O,ºú}Si[>TûÚóg4äÃn%]lâ*™VO@`OÖWIı‹™ìÊ5R°º(„šº¨û"R¹äËhY‹2,§d}‡º,Q`†ÒÅ’ÑÖê5µ|ĞgCáÛQÅÔœ0D Ä?pğ(I­	„»¿/™¨0‰KC’‘,o­@F²e"şä%ÙcŞºœ¯ŞXÇ–åão‘¾fÛ#x€Ræ ÜÕÊŸ»‡C²ØØVC²ĞK¬B‚Ÿ¢ZØáOI_jÉ’ÈıP,¶Öã#ÍRAø¦’ë „]
-P|Eo1ÂşÏ «>è¬fáßk|ƒšL?dŒ€­ÙR…A	ÂG¢!üÇÆİ!¬ñ‘íÀZô&ö\åË±Fğ.rËà4r©U-âåÄô¸„÷#ÂYñÁÒpÚíğNF™2® 36e·Åè‰5šÖ³Êğ{ë&L–XN`ég½W$ü¾!,¼¦8Ç%Ğ°k9ÑŒÜ2^aWË!ã÷Ø¸€¨'Üº#rãxW 9Ÿíp4yx2Á*²5™æ¾úFAì6´€›cN:ŠD=ÛµYîBáoá7Î[ØDnlõóƒ`Ó{jÀ]'FHmàÈ¼aË=°BL%iF¥9Éø‘‡glı(:i	…åÇšÓXìë£À•?l6ÉÓã_ûä²ß9}6<>ë“‹ÓwÃáñùÒ…ïNß}8'½Îåa!…³³P}HŠ:ÚD9‹Z}#6Ú®+,DEÌÙĞÄ(+áMßÎçEÃK¥fÑYXIÎ‡¡7Å@¹TZĞ>_Œµ88kdEº9¶6†µN6	&SÌuZ5ãhÛ)¯2;+›qÉƒ®„lw$2ï¼Ç§zú:ù‰a™ÏsR Ô°Èè“”4¤¹$(ıš#ÏO©³¬Æ	^ş¦5ŞŒãİ^s0|›EÁ»³‚wÕ”êŒ%({-oåSiWfø©´NOãy?MMãébXÊÁì€Ò+›ûbÂùL]ù,CTHyˆÊ^.HE8üg£SöVRÇñGN©.* 33lRÅú˜ö÷Ÿö÷ÂF¢_íæümSÿPg9˜ŠçÒ¢Î³¡=³R¨QIÛjª)`ûó&ÿ­¥à6ÑËhnÓIKæØÚ»û-}Ñÿútyó…ÉN5¢¢{›–Cû“Œ½UhUIÅj¸8 à…waJğZñîZ†@?@’^;ôfs+ù6±ŒS"7nµ¾¦ğ¥ÿõ»ÍÈµµ#Ğ3İ0!TôÂşÎw.İÉBº=-¾Èw7çİ:lfzäâó&¹Œ:²ï¤ş:oÓ¸‹­ßı¥î"J™râµ<Éõß\–êJ\D/âS®+§¤\
-¢7öM®¯Yº/µø¡>Bìø´¡“>MÈWÒb¦“îş³A| k „¯“g?7/È4%
-b[8ˆ­a‘›‰Hd´¢ØŒÄ8ÍŠ^r[Áz`35vÕ+Ş)8?Grã·WYƒ³Œå¬™]¯”ërÙåveUcaºõCLsVQ$µn¹ lMÙ…â–·=ïìv÷{ß¶Œ*¶ÚW¡”tÁXˆ!qYÕ	kşæƒ†zá#ûšk™sûÈáË¿{¬±"!m^XiF»–Ø«5Îk/mFÖĞOªıb„:ˆ2)=ñÏ€9ë$şØ½á#U=êwû}Ã#TTpF]ÚKnK‘(&wô‰?•æÎ¸Š|}5Óá»³‹şœvºÒí_ß’ÖàxĞ1e”÷^S§†Ö›Li+spÏœŞşÎË—«ÀøúÛÇ#qXÎ3}ÇíU+¨ÖôÖqÛ—óŠ¹Ÿ=¼/u¢<ã?£:Q¹«¢Ö2»ú@œvpª¬|û™˜Ú_#6Gá¡ƒMÇnÉıÿ½z»Š$7^‚^ùª–®‹ËÉİU¦ĞT<{Íà³<c¹ğ½ìyŒh6/	BQ HşU9pÉ#ZK®ŒyÓ‚’XC4½¾´€J1}E`3!Ì}'GCä²¾l”É‘\|Å"r9ù©r+’(áË;¥É@›qNKmNNj©y7æ¬&CmÜi-µ+r^“ûX›~UÎlqÃ³“IÛÖ¶ƒ®Cİik]÷~“b| ÅÂ±§s‚Î4™‹,n4¤'‰Ü¸úê~¿¦Õo…‘ïşÄ%Ù~<wF	İøıwFşÊ„”z3Ù…æ"…P«( ueOÈ˜ú6Ùú†S•ÈõbÂ‹/ÿ*4Tõ&Îï*Œ:é¿¿©+É•Åh-XŞ[]wu>ÙÖgF,§ÍÇ "ÙxLí ı{CÂ`èÈ%ô¥ğ˜Ò£§¡Ñ‹)Š$ßèí˜l§Rƒñ¦(rìZj#•[áWjT"¥Âµôş<Øåal#f0ìxlÚ¬Âúƒ€90ú´¯mwŒr@×Çâ'¸*¤{Ó»ğb'Ÿc@0ìT§À~’Áì›3DS}dOF˜ Îm&n"[pÈ(}26‰’\fÔ6`ØÌÄäKÕÜÛÛàKÀA"ë¶íkÆ—a3×.èÔ
-×LâfÒrµôIDJÂ-rA7Qa°ğüL\­ˆæòx*Ó × ç\û)±$±zÇxû?bÙ#–é´šXVKx`;Û’	¯œ­q+¢sMåÛ@PáC5=DuÏO3çaœ™º§EÒFüùO‡†(•OA¾¦î=“XãÂôIïå3Vi¼T”2^S+iE’…!½‚7¶™‘ÈÂğÉ¥ı™ŞÒNŞ~ô-<ËÕšòj¨ce7µ®·'<­Â­Z
-®f¶ÈâÄäâWì~©òÅTFC•¾­’ÜYC•àŸpèÃSüL¦¿ĞOe…TÉİÙV/"³°û­ÂlË^ªa™0ªË_Q?²u:–R®è„º1½ºğ½ÀZèÛåb«¶C˜XåîÉ
-‘„‘÷ÇÑˆ¨³…Å`+ô&²qÛ.|À·:¦‰ZÑˆÍ…ä”³ãm-æŠçİ
->bÌŞ2}ëÂKji©£›©Ùõòºâ$ßKà¢¦£ñ\üVù[V”Ó˜1)}íÍŒŞX¿ÍaæSÇîµgâ@PÆÏŒ´ŸÅMËå‘
-£4xç«—*§GA„.÷„\PwŒ· ôSš.’Ó´_IC‰rşMÔŠˆ¹º'ó2~ÿ÷?ÿK:,aÒ 0bLùæv=øoj¯5´5B±ÌK"AÂ: —s²˜¿µµE6É!×,)v6ãâ:¬«—î ÄÂ È‰ğİÜòá@ 4p ËÒ9‚ycO£Ğ&óÅs"·ÔµzSonoz‹÷H4ƒ;p‹‡°íıe#^F^Àqˆø[.y»÷—õvS}Ú›pÒ«Ÿ›je(~äXÓÀ¾²›¡¥íP›lÕÂïÚ€So6÷\‹çÓ9ÜˆÇ6³\sØä7{J™Œé~¸‰\Š©ÉZ3; {Ky¼&·lËh±ŞæşìcêRnşL:º¦-úØ"ÚöÛà_sË&˜ê,.\¸Ã?"RI«‡H .PI¤CtKÏ½µPièİÜÀšÿ¨™¹îGXp3 ¼à²ì {}şî¼s2<>"­wGGëPÉG5±Ã†è’é$
-¢@òšà’uÁñ	Û*R#ø¯Çb<µ›0æDÖm†IQOFç ë]@ìWt«úµ)WÑêKu…ÎEh¿v+47ù‘¤¿)Uïcµ—N—ì >şĞùGgH.úƒÎyçsØÉ=.Ô‡(éUñùãèÄ]¼yt4‚+wˆÅ?˜ØàÉäïâG=Õe‰|ñ)÷tzKÅÿºû¶ğo=¤Ü½r¬ï®#·pæ|‚Løküg>Îx‚âÁ3”(üÎ4rÔ{â¡dn„»X¿¦g+Íç€´
-zÃ@lòŞµÃïâ{K>µQsçUúM<ï‘¢şhò÷ÈòoÉÕ-ñá7ÌCO¾’Yâj`oëİukm-ÎşÊ^cVXñŞÀšE¬ˆ'"Ÿø´ 6ÒÆ‡ï’y\3ĞÂ†h÷Ğh&|#5ùÚ›xG°~t5ÁÎrGl«yb~öT›•{rFÃxÁ^ËƒX8Ô‘ß/?)mÉvÑú¢ •šŒ}ãz¾ÕCÎÓn+ ÊVjmÅóÄÖ¢ÏbZeË·ØŒ˜È‡[›^Ç?å_‘÷»ğÅBd_gtŞÊ•H@i;Ÿ<‘·,şÄ'š£ì¿Sú¯Û¬¦K¥âŒÕ™T¤·ØO©Á6U|“Ièe¢ÿZJä]*`AL]ŒxAqzQ—IZïÑO–‹¤cáDçQz&Åšà:¹*±e‰ÍÌ•¯Rôdçèˆ[P«”ª‹÷ûÏBÑûõSÈmç”KE'¬JãZ©e­Èâ·¼fµL³hPd(.*$“©Ò‡óe¾¥J.\Rïk\ÂNêOJÚnƒ`lıR™HŞ¤D4Ÿ·`²’4UÂĞü°ë$L[ û~÷ù~o»º t¦Ğ=ó£M±B ¿ıÙ<¼U»—«uÔØ‰ˆ‘‹¤Q`mÜ)¼3¹ña1ı’uZc?®U,•†Ş±Ş¯RıòÍH(cîø-¨'‘•£¸öFQ€´¸ˆŒ¶?ÀUQ(r—! pbœ§ãb½5‡Qåğe÷ùQ¿Â
-V¿Šo)ò¦êUJ*Q…Tš¦š,1Ô@ì|Õ)©Ù×€u)OYEæ).ÇEGR·”×¯eX•€DfZvN-$Ñ{~äØóVi:} £)ŞÍ’e—&µÊznâ™‚'ü†Å×44hr ñbÿÖóç^Š Ö!&Øªä;“şb`¶UÑ	µW“ëz_êgÙ¥ÄòÛGUL²ŠD¨up«¬."á_ƒvÑ:™RŠÎ,¾eì¤Û¨2Rˆ×üÀd1zoo·÷ªóPcğ«¿‘õx‹;/Ì=­;a´D-QÑ–,j¯ëŞ”ÅİŠ´9u\ÙS¹ğHÂDEw#y•‹ÁE³Ü£¥ŠRò—ÖÈÉıÔsoêyL>ç”0/ì¿ê¿<ìîU0[5­ŠmS\ØéŒiâ G‰h8s4æÀ‘· ¼èìw_=W°*_r™ºUcB£lFÖ«ÙXaAFè-C`!lø…n[eäjÊ¸•_N1†‹b@÷ŠÌ<,k†n`qZvi–ñº\¬Ç†ˆÈs^¹h,^±ÿ¿•íç«ü™ŠJÕ•›ªT¦æ–º
-³RÉªzÜÌS`åYI©û‘õeNQÂ­6±ª)ûÑÄû|Jhõ<÷Úögšï'ã”¦ãÕ‘‚`ÑÈ‚ëÃ
-"©7ÂgJ§ı&w¿´§ÀLBkó‹\lç—²½µ/R:°Ì‹ØkÕxÆïŠ!ˆ”#ØÙ“áVBJ	^1ù)åxv“$,ÑÇ",\5æiU5Œt6qÉÂ·ArøÊ†³·Ø¡l´¹rŸä¤âUÛ•zÎ`l/’±¥"ÙUãŠ3W)yÄ`4;ÉhrÁñªÉ.p‡†UC“³š›md2>ÃÇ…q$—ôÂbÇ1fëÒúd¹Ì¼ÀëÛó×¤°¬áåçø³	eIsù‘øÜœCşï¯$Æ5S¿K>ÂésÄa%Gê§ÔÜ£Åó2¨^ò´@:şŠ„%3¬àg¤l4rñ­Åâ>],âÓÌj=]Lö©˜ÌSy˜O“A$"Óœ˜¸¼ãù[\+×.3S³G™#Ë™äûGÇCônÒâçÚÁÌ‚KëŸ‘„Ü@‘cr%õ‹™À.™¦Nøãèâı–Îa ñ-ß*%ğœÙFHÏ1ìÎ$å	é¸c”Ÿ§¶Kàö	ÿ¢Ù„uæ‹Î„mŒßK~üákÎ}áîÇ_ò%”G|ì"5ZQª2GUº34g‹ä1[`Yò«PŞ—ìG±^,yVV&“ÿÈ•Dj_Îùıƒnğ}_Û(¸Tˆ´‰
-,Pİ!Ò“sämfÓôñ^oM‘â8K.in…EbËnVëB„gÿ¥o?&în5İ¸ZO‚S×¡¡¾#C±óI‘É4,¬¾£B67É[‹âÂt)^´DJ‚'ğq|cáöÄ™Ä&‘lQ)(…V¸:î/Ëç½^ÂNWtRJí‹M„º™—!Ñ>İ•VSëœˆúR×Éiß%'£İşË£# Ì=ÛÁİy…*­®E©­z¡²T¥×ª¦Wæ,aœ_€oËv1bÄMW•†­Zã(ä¥¼ke…i_Ët¤2çÔ/û’ªì:E\0÷U¥	<mh)E$ÿŠŞQ¯ÿ"g==ê÷wú;%û¯¶Óæºy¹ß?êôòİô:{½2#mGŞ2svÓB£LÖ•÷çA’u¥úşŒğ¯–Å-…zz‰¬ßŠ½ŞŞßßÛ}Û„W¯¶»ÛİŠ³®Ï™1ö”Ÿìn¹©H)ße…‚sL0ta9ì˜³ E~µI=W¼Ñ):!İŠ
-œ]—ÊänZ›'ÛıíW;İŒ§in!.mÌ\é’¿‡· ñ<Ÿ–Ëbå2Ë¡+n‘]´„½¾<ÚcìÕĞ¦­vî×q{p¢Ze™-š´o¶ÀØoE}TÑ,Â«ø[½‰•±bñÄßğô_w£	3%3sJÅõ;  ¬`çªallRPØíîî=¯GN±‰kÊk ï—b£"óğŞØ“G„-(W,ôŸUş§Ôi@’Èİâå"@·Ï,’¢ Â9´Bj;€ŠK™!ãN(xål¥~œ[LöÛLì­¯É÷Éßjµüb‹ëiAª
-³ğœ¼l¤PXBğ«pQ¼/5…Ìé›¿(ÄºÎ|]®"÷ÖF¯–„]{IÆÆS ƒan/M"ë‚ÕÒ lÕJtz¢ôª¦•'Öí•Gı1ì¯÷ùı¼(ï^ê‘CïsEÊÎZsI¹v¤ÂÎŒ¦W¬@ü,uª[ÃYé+]æ¹Šx@lf*tm2 ò¼¬Ô+Š*hÊËõhUšE}/½„ZÅÔèÄB‚ÿˆ—ìƒeİñtı°ëç¤2£RØÊ)ß2ài0oKü»ëê¾ ¶ßŠ™6Æu…F•¿Æİ‹63¼ÖK’#ĞFÚj¯õzÚg#±óëXv°ÙàZ/Æn0’Ö‹²“ÊFât õj¶ª-F.|ªĞ¦ô'R T‹W*G¼éÌĞ3g]/ŠKÔ9g¹ÁVÑJŠX—ôËmiñKn:á%Æ)…JÅ¯4aPÅb9ÉFcH2ª^_©ém&é6ãıÈ–ÇâìP­ˆµ–¿H»[ÔšÎyTıMF¦,O©˜§²×Óı\&E¸éwXÂcqÅÈ{LÅmø}œ…ÿL-µõÏx‡}7çT%—¤ğDZØ–’Z©Œ.â~ÊãxK¬²uMsŠ‹ ŸrğRËÒSDÀ‹û[/}³æ.a×ÊB~8‹¥êÆÂ²™í\ØA«cÇ.øEú±„Ê(bæ¡¸™Ë³Jß³ßz‘ãĞ z…÷ğŞÄM¹[E£7ğ:ŞÅß*sè?/WğÕ0$3Š7µ˜‰63>vCL
-k++y¬TI^¦åwğGuDÒ¡ÁØtXŠÆ©—o¢Š&b3¢‹ò—OqRŞºD$İP;D-C©ÌNzâbŠµ(xêî^ú1¶ş‰P¹»ÏQl†¡©\2)N1Ã*÷nU*å–!BØ¸¯,E'ı‘D$}‘±•¤Í”rıhœ¡b_cL®b˜©R:æ‹¿«®,^â¸pÔïöû¿Àj8	f
-¯çÕã&_Ã2ìäQ=sjëÄ#]¡^:Üõ;ş/ \^k7|zĞ»ì÷ÏÈÛÎiç¬sNNß½9>'OÈYgğş„úİÎ›Î1vÎŞÂÎFxz7¶;ù øsÖËäïD#¬"_™ékFm‡ã6IÔ9¡ê3 Œá‹¨8êDáäÔc)ÆğE©
-œüF…b¢‰NÀà|°áûÚİRaYŞèc‰Ş4¨äkM0ºá©‹¢ ôf,Ö ‚—rfÏŞJ¹/“ö1K„«~éC˜‚ñÔvè¨›|W’Hr'“jJ×•8åŸŸ³ãèE•‘›ó™c·5£_ Îó—2JUo#Ew20ë;ˆõêò”Ç*”Ù‰uDHPIíöV;ˆIøF^Ú.b`‹0 ™Ùdœ,÷T¥ïrŒ}3®P+Âb$I~;ıp&Æ_§~ª
-nĞ8ÚËT•óéğà.um}€]¶êÄ
-¬]¼9µjpÛö¿º%}JW}·™ÈµüâC“™—LZ)dO İ‘jTéñÍUÏ…m\qnòøYgæ¹c3¯”3êÒßğ¸'`»ŠÆ7Z‡ë®Ë"÷j
-\ü&N€1x{ÿ]še© rB™/DÜÂŠ¨‘@Ğ†x}»â²}¨ZˆTŠ2òÕü–±İ™óæR‘­máTÊZ3gyn½**©´q.ãš­¬šª9`Ó+äVEñ>©ÍU%:|Y£¢ˆ ğå¨à¹ı2TB|`µM§ò—²¦±M"GÊS–]Z5ÌÂ¥ÓK_ZıkIZçÅåp„i—;ñzÂµX+Á³~5ÃªƒĞs¼@#½(¶âÃ0ŒÂhNt¶f¶Õ}y**S8ä~ÖL'‡_è<ÊÒ€eóÂKZLÿŸ•èTTxÊ$3ø|:ã™í¢CtÉ§½H^VçdgğJõÀøc9ø\éjSjVû¡}_)Eí¼–‰
-“¥±ÿè Šë£ÅgW<ËEmólOi˜t„.@»¡éjóRz3]äK+ÛšÂ¿R2 îØ^
-íN½Ñ´ëâµ»gÄ›
-÷êwl (G¤¿iÅOˆÂ<'ÒÇv<ètº?¬'«·ÄfÚaaÄËıŞœÏ›ê]	jI¤7sˆëª™SV^ù{¬dƒÄk¯:Éöb¯BA•ø^–maÕ£Âò¨¿ó%[Ä­şÒ›Uª´"‡ú>ˆ°Ç@2FÈ®Ì/7<†¢¢¶â{ö…Â&`ŠR¶£„g‘1ÕÑ”U¹‹[!„]®H¼„qUq“àÄœ%õ$c‹éA0M*W}Q,ïu§­­,È_…8RvkR:Lfû\Q¼}@†ŞìÊs_²Àº¢7Ô&C:‹H«ãzîíÌÃœ=¸¡ùU:zÌó
-6L";ÁÌğÖú³QA/éJ(a™3ÊuvŸtüôÊ­=ü<Vkèc@’ÇKFQ˜T¬TZÙ7	qKÓ7,Ší¹BØ5ô•[Ã³UPÓé­‚$ê…}çÏ~Åeº6¾…æ[ô*ÚkÅLHËwMC)>¬€Ø,Ÿ.›SB´É!Êø‹½!fÌæğb4í€'3gõ…1ÚÓÁšÓdäxÑH0{À+®8Œ'Ù•¥=_Úùo5ªu}SZa´pqü£ºğëÿ  ÿÿ O.Ñç
+               xœì}kwÛ6¶è÷ş
+T·“‘W~Ånê3ndË‰'~h,¥½g­»–,Ñ+ŠÔá#'“µÎo¹?íş’»7 ’ 	‚ %9iÇøXŞØØï½A”Îí8ôãoö$œ¶7¾!ŠÒy°ìûiØŞ¹ÛØ,T¦ta‘#ríEîÄš{¾kùCü²½»İ™,MÆãù´9¦şäÄº£‘1|8f¿´•³{nHmèœUÂÖøç·©Z…ŠQo=ba»ûcúŞÌjïÀ7yWíí§§ıW'İÓ7²±A>ºëyÕóœ{ûÎf#]ˆ?ãMÚÿ´ÚŠ©ÅË³Ü°ëØ÷îş€æÉßcøÇò‹«TÌ,'š»êéa™z¾ıOÜNG7ÜÛ¤–ó¨3––ÚcèÉ÷©{oÅ}¥Ÿ:Á‚­Iï±ıZº[ĞÉÄvïÛ»¯°­²iÙ&`)=$Í˜ÚúX:ãşAéŒ2•Ç½h+.ÇkoĞÁ-Ïî}ì ‚éé^¿ÚİĞì&–&0İ¶b9ƒÎõ{‹ÅÓ{ëWk²‹m‚¸ñcÇ‹&Wwwú5Hë8±‚±o/BÛs¡³Ö¥Gz°7Ñ¢Uİƒ
+¶Ø1îíê2.¡Í¶/=ƒî«ãŸö6:coñØ¦ÎbJáçíÎÁşHËı\úËÈúê·:„¸%=.>¡J|û>ÒŒáƒ{O]âx3êt*¶*Dæ@Ã¦Îh
+W¸>.¼{Ÿ.¦[oòxaMìh®ïèNì7F5 ·ÓäCÇ¤íXÆïl¯÷÷_õú§„{À šâ¿+¡\ùKñ(²ß¤Ÿ>Ë	¬ÜU9§ÿ|,CÁ¦giº\/ïlP™êöí[vå‚s;¡û’üğ³šE/‡Ûº¨×dG’º¡„#zßnñéŞà4o¾û„ÿu\:·>·4Ğ¤aiv*hX3Ö&m]ƒÅ‰‹f6õXò~,Çú@Ú-,¬ÿØğ¯ûRíFdûÚ{XÙ®?¬~Ì{ì¼ª&ÉmÓÚ_E7…EâÎJïîïnÏ
+,ËmLÂ+·‹ŠrêğN¾¬rg°˜ìNŠÙv+™´ªMÂRÉFÆ¥	\Æ…ó#¯ªgœiTÊ^îš±—IGK°™qY†İŒ‹Éq`1c?ã¢cC9i¶B,jfôïÃ«Ksv4.e\¥y¥Œí®9 U×*çMãR%rVÍ9E)+‘j¶Y.‚…N8ó#XÓ,—2ºç9“:°šg¥÷z»{?Õ0úñXäivÌ[y€öïïAğâWâc§ï ¾
+ì`Ep‰…‘B¿­ª)ª¨Ğˆ$Æ¥)ª`ó¥Ù4ÛNÃ{ƒ¥ŞİÁ‹ ß}6Ø¦ÎçÏiØ>÷`†Vçıp“´şÒÙ¹kmò;†HêİíÆgò®Wab©¼o½µœá6¦^ÇewnhÍíz÷K©kÜ‹yMc%.Ë0*qK-~%iËø–cÛ;cXt¡äX”ú[]1¯ÙøN0xŸ ´²+Z5!im ÿT ZÍ>èk|şfy9¦²6ø°¬I› gä[{Qšr¾{ìØãLêá×y×V ,°ubûÀ;6Ég3°)W¢šéÂŸ·ë]–¹D=Q÷+áì‹êº²bÂÙ¯ì‚)õ-.¶Ùş~9°ñç¼!®{Y°ëÑ{ûê#»Ë±BëOãø2—…µ·tË@ÚÉŞîéîéWiÍ~UÿRÃ0ôÿ }áÛ€s#w‘[†	u'¾gO:ât:Ç1¢¼M*’´af¡ÿ(Üê0Ø‡-ı~ Ûë°QÒ>:ô6ğœ(´4œndF¾íÄ<>ÂD|+™6øŞ{‡to…ï}xYÖwfı1zÏ|	"¡ø¾üÕ ù-0¨·¢ÓäáOÉÙiÚlFéL“9±ÿÚê¯;İãÑÙÕåÍ°y²Ñ¡‹…ó˜»¨ÀNã¾µğ7à×ğ^lıxn+Sk…ı¡OË†éÿïÑu÷f8ºîw/6qK³J'“S‡ŞeÍOÏ»onŞ\w/G7ĞÃÉÍûë³›Aÿúâl8„Ùoä KÚñNR?ìCûƒ>–u?ö- Äã©ç–ßæ;¹™Ğr,lÅ-!>}&°ã)ièõ?-†,dgu ¶İpÂ±|à%³J<…{ Óy4;s:³˜•ğ­7ôNunÍoÅ,n-FƒCòİ'«ã ò pÂäÂ
+ œÏ­MuÇçıË7£·7Ã·W×£N0‰`#½[[äÈ¸`íã«‹ÁÕeÿrtH×W§gç}Òıµ;ê^×ìê¼ó°VÎ‡ÃÅy=X¯Ò»ŸÜu€—¸°8¨¾qH¸Bå±ñ¾F¾«¸ù;TÔõìpN§éÅcçŠßVÃ½íş=
+€Œ½‰ÕCa;ıÈÒ › +à®=–Öñ–{æÂİ€™ZtŞF¸ÿ¥¡a„Wü*o"ÎÎpÂFyƒMâF ÎÆ‹R>®yN?Øs˜ñ«ímé–5¤ó…c¡Ëª.“¦ˆ Û¢ß…Ì H¶²M~»ş×¿ˆT÷-W•TÎÿL¥ïÈnÉ*øú¯_8µƒNnµòÇÜ„¾ugù>‹Ü;û>¬Ã?w®ßônööK&zËêB£/ 	™M’àürß	¬øMvÂÔcúZ(è?^Ea:¹´¾.XÍ|á¦i'{Â?s½Mçïƒş›Mòz“u›#Kx»qî„^2ª4RkBCzÈjoı¾°îÿã–!ƒÍyI8^èX..täñkßN{ŞŒk\^İüvİ±ôhê{ô6å°Ä%
+m§sîİw¬vˆ9ÒX†“ §¶ú¾¬¥ÀT0*_	=1$Ô‘TtlŸ9t vıOÜ&/Àa¾}wé¡>ç  |ñõ!yŸ~àT¹¾Cr²`×Ø·1x˜°‡²²2^ î=ScÇ¨+hÉ¤ß¤ú®ĞÌ1åôqËÜ7ü&©Ç¦Ã¼o!•Â)­¦CÙ*Oo’â×#à)ä“°ïˆ¢ñˆqÀzŒ{óyñBÑÑ±ƒK/ì9Ôµ7
+¸FÙ7¶b¬Ağ›NÛôµ6µ©[8–{(ñg²»½­h²´G.¸m>}à@{V2£è6`Àİ½ƒ³B'~Ôì<;
+q³Äà¸ Œ”ÜŒ“şi÷ıùHİ‘
+Õ¤wô–_±íM>“EŠıTŞ6¹$÷$ÓCVbàd™šùï„´<Œü;ä±’z?%œ<P)Yò•½SË-ÃüBZü§ë£5ôñÁjú–„¾ííƒîÁö†²Ó¼åê÷^íïmÿ¤®g»Ôç[ìì¿ŞŞ;Q·¸¥Àæêôvwº¯Õõ–}nJıİ½ãl¶ıPKBÈéÎ©ÿx»h¥§•n±$ÒÎ3"m
+Kò¬65]Çëø[˜¡‹Õ ¢¸ÿşüöˆtÙUa”¨\!’0rŸ°füS™c½´S9Ç©ô/¤Ì:'sÛeRªF%":¢}3+9#9´: RúL#æEÍÎ±ïi¼M*A@ÙR…§©qéî¸bÇa"–ƒÊ&¬vmıwd˜Õ‹l¤õXt©pÂDb£¦IÇ¾w0<
+"•oqNÏ‡/%‰)‚ã[Çl;ê…¸¨‰CÎ¹*
+Ğy$ĞxéEN•ßßù°‹Úæ2ùÈvĞ@†=ê`m')EÉûˆÁ÷Ú–mÉ6°”mc2“›.‚ß€º–3´BäÅ‹Î2E5$%ªdùüRü·JèŸv!:wåâœËUàYu7‚¨6f*{³™´¨¬.tÖÉ>©k•ê¥Oõ=Ùîìï+¼Ô²ß(ÁµÕPÃãë~ÿ şå{¡ˆ"İ“‹³Ë³áèº;ºª«*‘Ô†cß²ÄQ|°­‡Dı‡ä”ß¨_ãoøvyîÈø FÚî!ioà±¿wmÜ×OŸ3R™|ÀQ§wd¨sàœ»Á0±e”sûÎ?Û1$¼Aò“íF|iØÚŸSÛ)Î…}mØÍŠEÍ´š¤0åpì1–>–53?ÀDDŸ$T
+õ©¸(µx×ÂXyâÑ³^İ•ÕûœÒ{†Ö êTtŸÔJ;,ÜnkÒMÏÒEÈ¨K»
+©b:çeëà
+•Ša;1…ÕK±ƒ!ı`MäÎ‹½ÜQ@”ÙVĞéè#Ì‹1Z†íÓ›öxfùç4rø|	zâ¯N=?6\[™í"€ú £ì©r,~:o¬Pğ0íD†Qªª‘u{LÀğí2¾¿¸òœÖ™ON†~`¨p9í;X „µsv¥¢f©ò†«*uêw…•Ë  q[3^€ğWF@S™§JÚa‹Ëe,Û”6PÜ˜TR+mæaĞSZ¯Ô@Ãåg”¦¦4€?&6|XÁ·dd¡ÑfhÏğ°YÑŒ€üùh»3`Ùà§Nk“TØhòE+»hçš“øì¸1ôĞ!hÂìKÜ/•ÜÓù-Ü@  àsTC€ªÕÛ^e7NI;ßSÛrDty…ˆN'¸zöK•‹2»ó ½5áñ_1s¨`ëRV(r+Ûx|ø_)Ğ>W2öŠ†‰ŠDÕ6àJ,Åx&Í8úQíÍP³Ç=7X+Uhf•/¬FKcÄ²ƒu¢/SÇ] g‡¸&æÑÈ[‹b,†ß¥8[²×Ds¹Ò¨Ó$¶’#ë£ o¦l~ª°J]†ˆGËÊ0ÊB¤¤Xjæ€(‡ğêĞX]ôKWkÓÅ\^µ ³ª,u`YtTFñ/|ÙñÌdóP¹v*áWQ÷"sÂåÊÁƒ"Ÿ‘òµåÕe…¨‚ôV5|Ï¼ir4¾D}£üZaESYÊ:Êm¦&Â™Û‰_¿N¬mª¢’„—?Öğ‘KL8%kÔ{ÔÁ)s¼û)mŞœ+¼Æ-s_¥ó|h‡uNı{Í~5‹Æ«h§;ÌS@Õºk%2(Ùİ‚½Èd~y3G>¿Å¾.æW8_¨c’S_Hw:#>V5¤äOa'ö½˜N0l!«
+éSƒÀ ·ÉëË¥¡Ë©“ÒtÙeD0ÆõğÍAuÄJSn”ŠT*¹'k¢Ê¡ÙJãT\ºÀ¨áñÔ^èaLò-ÖÖÃ¢–Ò2ªÕÊ>Š¢a«º‘© ‡¥üY<ó¤f÷;&¾ o"—¢5ğ­À
+	_g«Ò—ßş¥"no0vi«<…ğ³©Ñş–ëpM².•;/-&rÔîœÀ¤ÉÕ"°‰dZ	Ÿc%ŸÙrƒ-K¸ê’ÄuXÖÇqC­Ó«Ñ•Ò 1VÖ äôîÔÄÈj~v`QZ°öHœq~iEA£Cÿ•RÙ,«˜¤½ªÄ(:FÉ€îV_÷r¶®œ0u²å`ùyar˜Äï`ØräP”»îÑ=ôÌ`Ä€§NB Å´l¢, 6îq|DÌRth<°Óæù»ª;âÄüÂrï™JˆÎÔÕŞ£3Ü}®½Nõ¡F,0CM©iIˆM•ò7V~š‡ÉAa
+SIlQhqÜï«¹˜'I<•&/cK¼YÀ¤o„Óæ’x¥1^P°cİÉd0xé: !.€I3–l× z+¯Àëê>8ôlÇFgÿ÷îı=r®k´†¼¡À9i×U–œ’İñF‰NKY”Øô½ÒˆğYrÖZ0Ú‡ËĞ÷ä®Ö§áÕÉ/VMÇ…VÖŒ¬¦ÚÕ]ù¾å¼Và8[ÌƒF³]
+Ç%l†Qñ³0ÊÇ¢©Z
+_%l5òfA‹Ä=	Û¼³"hUİNx$a«êÒß¡rªF±3¶âşGÔQ%G åšq©Ÿ2§¶ÊH€N'¤ Cìm`š>O´1Æo“K·eI+ãÂıN†BšWê€Q]jû9µ=Vë°éhéĞÕ¬Oõ„<LFEQ¹¸ÔÑ3`1¼ÎéØG$•ZŒ2	4ÍyS'7«ŸĞï1œz¬ ÿ7¸Š~³ÍÈ(J¸PÃ‚itù'½>ZãYCµ	cê74Ì\\Tñª²"šúg@Tß[<#*İ0ÏˆêQıq•ş›Jm0›’+¤¶“z~?k‚ÿØš`µğ½œ&øì¤9:u‡dĞ¿|Ó?¿:ïşÛë€qåÛt3ªá>â¹¿bƒã)n%Ëzgc
+"muSR¥!y›N	“„A€öQ;©×n-Øñ©çğë÷‚*nozH_²EzÑÄ&C8/ğô}>MŠóÜÄş(˜»WG½rvHıá"óRÚ,İ®$¸³àÚYíY‘÷xÔ¹ø¸÷u.<òÕqYİ52rªªw‰äøƒ/q…şyu¾EF|"Ë\ w–ã9”ÄšrnİÚSÒ³§³¯ï…ñz—ºF<kÛÄç»$cÎ•#¥|·¯O÷ûUù¼+ı²şÀæFÃ÷›¾@ªV•TÃ3k¯C!³ŞnÿÇ“½İ%M(XVaFÁb	9æUO@´T‘<läû3!3‹›_¾5ÌG¸òüÅk¶ÓÛïïnf7¬2¥Tv²b‹ª/UÙOM•5i0e 8ÎÈ{;.¼¸ãRÓ›;±©Ww¶sïî¸è4e^J©K\JcŸD.ƒËOzñ];IïÚ‰t×¾­ù„åKñ+âA‡ıjÇ‰”µ	¢Û¹ò6Ü¦Şğù¯İr#º*(¨·†”/nYnş˜àğìbĞ½$ƒşõû^÷-şÅ¼Î*ró‡Kj ñr~ciÿ·I´>‹Ò÷öığığ\]Ÿô¯ÉåÕ¨KÚïºçïŞŸ£Ü¾·gCøãl£nèşÕ"<sÛıØäY¨ïÓ^wa…&´_z!­ä­‚C‚¯üımäS7 ³Àf}]Ğ šıÌ«QY#®?ÁŒº³ÈRgâı¼D’¶4>|DoÕAÑg,ñ(‹‹Şu¨ÛB{ú:³Èağaéù>l’Cr-^ÆX…µÜœ‡[B¥Ä&‘Ò\?îŸKÈêKt£\\o¬Ò&yå^a0ÜdmCÅh5ÚŒ#?ğt÷MŠFj„˜î¦!¦,p/€0ÏßB€[ÚûÖ™¿ó½9ÁìHñ5ñƒo‹á#B]|¹€@ºöÒ&¾KEñz±ø‡w¬z³øå:`…$®ñù—ÎhOH]è“uüÒ	½/ºÅÔ˜>sgû ³Ìj<ÖÖÍBT¨œÄî¾4‡……:t°Úf$Mt³‘kUNio{[šÓê`šMç7¬­›	«@¶ÈuÈ•Mİv³Öü	lúíäç3ÚOÊré=…sşOlÄÚÖH{n™z5¦÷c2=ôİòí™ñÔÎy}İ¬’*5&´›LhNYÒk¤xÆ“ºHÛ.İì¤º5O4FŒ|»¨Ÿx;pÚ6uïÍ0ÛäTÏ …DÂE „‡âª“]èl{{Ss²û
+¿ÚHk‚f
+y]âPä?iAÏPZ™ô0OÔê'ÛEæš×êg÷U~:ñõ¬ÓÏ!C¾ßßNÜŞÈ¬6sÕR¼±Å¡ÒkÓx˜ìÍ+‘½‡)Ş§t¨¢¹ÙhÂÚ„é™ƒdÀÌ#…dUÎôÉsşüŞ/?·yV9G:ò:ú¼9©ŠâŞ
+GŞ„>ŠÜÊ™=A™÷pñš™|2¿›
+èÍ î‡lê¶hÆpDöêêpŞRÿş=&¼æÀSl84=Óô÷hîĞéÀaÉXê6¶ƒóÈ,§mÂ2FÊ»ôèß8Ş-MÒéÕË±@Š¹±Åz‰úS(MçöÔÙ1’¶B¢Ê$Rãò—ìø•»(G¼FÇ°o’jñmˆŸ³•ò W–¾Oêf`3®	t,¾GI	(¹OoÂ¿îØA•+ ’{áÈ•’®ò`vD2¸‡·‘*¥“P€·²q¼ÀZšŞŠ0oDæ—”äªö%†İ£dG f¢€³=ø‹e¸£¬‹’,‘m¡®`ÿ±Xé“uRl¡éO' |{÷YEçâï’'á'	  2sZ?¨ns;é+ƒ=…VR­lÈsş8•	OsqpÕ×ŞCœ§=tì9y–n]Ád¢¬RA–DÌ¿RFÌ[KïT*œ „¬Ê³ ”4_©Õ{É÷Šö°úO¦‡–Ój2¡ƒŞê3ÔöÛ-¡‚	lÆ¦¶6sIN©ƒ!t¡ÊŒw RÓº¹¶Æ–½Ï=÷>ç–ù„3İkÏ`G?ZŒÑÇ¿6I›% ÙdiF•Î¶¥¶ìñ~
+­JŸd­•ÈÀ£3VŠïé_b-)¾Âx(ÃoŞÉS¡?á+¼[PLu©ŸØx†d±H½±ÕØ»ÔS@Ûä…ú2Å¾Öt½ªèÖ%®®É°T¿Dgš7.J«¿ezÃ·|ë€,ÉÂÁL§YÌcÔ×UAÙåNÅûúĞÉåm-›“±«ä·(ggá›S3UÌÊ^­ç+:ÇŠC3~¾ñ“ô+ÌúDAi¹KĞ¼ê†½Q>É‚ÌQ·‡öÓ«ë’19]Ş¸EªĞN•Q.M²×irÕ³jjvê ÏN½ş®×¸ß9aË —«Â=?_ÔîúùÒ8ô£fŒ9k“˜ÈqÁ7øàÃÍ-u1`MB@ê‡”ş
+I5†×Yê5ûrÑTÎU¿Ï&~bFşoXš–\nóv¦Árr1áX˜CÏ
+,«‚•ˆË
+İ÷°˜†'Oı9š­K-pÇîã¢§FFİ˜n&–zÏÇ-Rµhæ‹ÃRóˆ²"xÓr”P7«_¾”;wš=<óšœì×8<,æ®Ÿri¡öàáeäyò¿¾û”%¶º'wÊJs#U1ËjÀ«Ê¸’
+Á¨Ö æ§¥áa¾¿¥SâÛîØs²çéP'"A6ü|aù·ÔlÔ#.(™DÇÑÀî48æU$9)+MÎ¥ _ª^…ÑóÚÕÑ¬æµğÌMR'É¥nÜv\
+V‹ÊhÛ|)Ú*2aÊ%gÀ¨ÙZiH¨ÙGÑŒQ³•ı¡Ff`Q‡ˆóÈ¦EÁqzkÓà1£Æ¦Y›]ƒĞnm¹ÏƒÀ-¬=&3e3óË¥B8¬—Éc¥¾”&9 îõû§İŠtR”«ôê¤{úcU_•B]¹¢fíÁF¹±|‰Ü†UYGåÒ4‚)6ÚÔ‹_:è¾:şiO¿´·kwT‹c­ÇÜÄNïÇcï_¼ bÆ4Ö	AÂ²Æ¶Ì´×Ûİ;øÉP¸[ã^­ ¢ìM˜™DŸ·6lá]"ˆk;Ô&Û2´D¢^èÍihŒµåzsÛeŞ³$ˆn`öjùR/¨Ãe®ƒ»,îüşş«ŞAU;ÿTt.IMr-Óy'\I7ŞóvÏ€Ë·í íë$†’Èe]‰OäÒ,	J^ùñ®ŠÒZõ
+Ü]XN?ş±=á_÷¥ÚzSE^tö¹hI±Æ: —åÓu×Y–eTºÏ×?Æµ<ù[¾ÔV”fÙ¯QTñêà¼j*äR_%Só˜8ÉÂŒšŸµ©áV§-Ôd†_±¶ÖL„/õ8R•eìIXd¯ €»7]˜'A»eNlÛ†	2#*ÍÆ¯óVcsWm•G£kpeMgtJ.97»ê{`ê•‘/«¿…ŒO~JXX¹ÔO]Ñ#3ğí;¼4 c/HÖC¼4®§1¾jù·üà]ò;ˆ8dcÅĞĞÔ¸çÏè˜Ê(«–O–yT*.
+É~ÿ ú8KRåÈek‹»Ã{‹…*÷Ï‰ËWÉxÕdLqR]ù'ìÊÄ™ßøB
+¯\@™ÊS\W
+oMl)¢ÙÚ×‹-„êwä¢7içs^¹^Ho¦‹Å_†‰×K\fÖã­¢ÒcÃP(|—ı¦×	GŞI;—‘Ô®I®«|©ŸûªĞƒQ.¬|1Ãğ+€j9(q Î7®¦Yôƒ4[Ä3DWõ°&ˆ6àF|ì…ğY³E¡½‡[äUàFCm	Ë%ƒ}ñwğ¯&Ö¥àŸ®Êô<!ü/ûËÁ}}˜7cÙ–?FÎàÊˆg«ÏRŞ»ëxèLB¤ØzÒşËÆª8jÖuøáåE*m:äUÑ3lTb+çX†›Èä&X–›à‰CĞ×ÍC,Æá›ú3QÕÃWÎ’W,ÅSa,Ór²™'ípö×U=|9Şø™T•øŠg“Æ,s½ség–½Ú"cÓ“İj1ıç«]ÕÃ×M²ŠŠ–iE¾£eáZÎöT°Í–ñÙU=¬h5ûµ±¿O]Êr§g²•ªÚ=;V=;V}­UÕ6yF©¾®(vIIòmå²É¬FOT×e=j"SÏ3=Şˆç}Z·[¤—jª¶Öe§*+ÉSô‘ÂHû¿ üpqñÃÉÉúõÔb	¦4İàÙcêX˜”å9\ÛÃ;r	}j;Ò¬Œ	56±hRˆY1•Òpò¹¿NÜ{no°×kŸ’}ÏÃâC1Ï0BïßÙ4À¤‹ñïŸù˜xeİ8&BØ×#›ã±sìNŞ
+‘+•'ãÛ§wŸ§'=
+Œ’xÔõ.Á;0£ry|MĞô¢Y´~d‡{¸BL'²¿=	ûsŞÉ„äFÙgœTV ÁC—Ğ]Ô¢y¹pçŠ73ÇĞ³€ú¾°Á$Ğ¶òDåµ;cñÓ¿2õÈ³¯òN‹±Õõü1SNög²M^¼H‡2H×TV*2Î&Clá.Õ›­ƒÀj6WIıEŠÇDví)Ø„g]TUuQO…¤
+É–Ñ²ª2,§d}‡z0,QP¤ÕœÑöú5µ|ÒÏw£ª‡/g\DbsÂA
+„os±Ãlò²òÌ•DÕS ÷OÅ)“¸¬ˆ3’ù­5ğHö3OÄk.áY’¿æíëÅúul[n~Ì5{X©ÀWÈ!å.ÀSa­â½ûzP›ÛzPVÒõ(«úùğûd¬¯kÉœÈÓ`,¶7ü	–gœUÕÃå\‡üé˜5¿¥aÿgàU¿ê¬õÂ¿[ü€W™~¨v0–Õ&Ò%é_ücáîÖäÔv`/§öÂ|çƒô‘ñàRrZ Ó×š¸éq	ïGş¶Ó:÷¶†ãn‡Rc–ã
+¨Í´.¹U[ §ÖxÖÌ*Ã3ìmÔ!²ü	ãÌ¢O
+„ß®
+Å[ZÍÁ°g9Ñœ<	0ŞâPËã·ÏĞ˜öhÆ<ºcrÏ9$Áƒ§_O°lMus_}! vHY@Í1'G"íÚ,w!ÏpÈğç-\En,Íóƒ`1«5dÀn~cÄü·ÂÃ µ°4ïG2~(­kıPİ´ÃòkÍq,u#`å›Mòüì×>¹îwÏ]ôÉàüj4:»|Czğİ»“«ß.Éq÷úDÙM…³³P}HŠ&ÚD9‹Zs#¶xÒ[Û­°©&X°¡‰Yjû›½],TÓË¤f1šYXÒ“œÃl‰%Rõö0#2jóî¬±-÷l·Ü×ÙÂw¨«Ö:+ïµãX¯o§¼ël|U½nçåİC\Š]kû²;™wÄõ‘_ªÿAYe<Ï‰ºƒĞ¤ééú#é¢d{Z˜ôÄ¥8ğ|Ÿ¹ËÕËx‡Âß¬AË8ŞíˆÃ@ÍÖ,ªÚÎm«1ÕKPv$åKéT^æ7ø¥´O/ãu¿Ì,ãe:­ÊÉí€Ó[›ûbÄùƒ4»òU<‡¨ò•ıBŠpøW<¼¶è}Ç5:Eÿ¨€ÉÊ°|•*Öç´¿ü´¿Mˆ¾ŞÍùË¦şMû¾¶¨óÃÈ[Rhğ’–õ¼¦€åÏ›ü·‘>‚ÛD¯£…M§m™b×ĞŞ=íÓı¡O—7_Ô9©•¨èŞ&¨åÄş`ao+­*™¸Sö4=ÈÂÈ” Xqug#ÀÀI·N¼ùÂ
+E¾M|Æ)á7Ië»Oø@îãóVäÚÆè¹a*Fa	—$ånÅHéÅá|¸š›¹9û¼E®£€ÎÄ ì;i¼.ÆÛ´… ²ØÆç¿4İD)SN¼—ï
+#Å’ËRC	@Œ">†rV0’”KAŒÆ¾)Œ5ÏUÍ~T_!v}:0HŸ§äi3ÓÉ&wÿÙ$> 5`Â7È?¯‘Y+ˆe=ì –³„Xê°DµvK-6ÎğE/¹¬a?°Ô5v5{¼SP~äµ[¯óÎ2’?´æv³§\—Ë¦(—§xV5f¦ÛßÅ8g¤6}. ËªìBq)Ú‡^u÷zÇ_öU,E¡wÁHHMä²®¶zÉõÂGöˆk™çÈáË]¿'|bML:Ú¼ğ]4¦íY~`¯×8o¼µ9^Ã¼ôöK-ĞAÉè‰ÈÙ ñÇŞ=éõÑÓ~¯ß¯y…TÎT?í%—[‘(&wÍ‰?•æ®ö+òÍÕL'Wƒşˆœw{]Òë_ÏŞ’öğlØ­K(ŸüMZ,2¦Õ\æà»8Ç»¯w_¯â›Äa18?ˆè;n¯ZÃë`«>Á&,NÅñ¼bæŸJ(¯øÏ¨N¬<UñÖ2§ú•8íàRÙóíV`jƒØœ
+,f0&`KÿÛo«KÅ¹ñ'è+›±à¦¸ß­3…fÁ3È°·X f–gì"ßÃy@ˆæ‹’ ”
+0É¿´—<¢ôá•1oF½$ÖC¯/£N¥˜>U·¹?æ¾‡Ç‰+‡!rù _6ËäJ¦_±ˆ\~tnEò…"|y§4¹ÓÕ8§egNj™u¯ÌYMîuåNk™=X“óš<ÆœØäî×åÌ¼;¹´m;è9Ôµ7Lå›á.®=]|á»&‘Å†4"“$‘÷âA_İo[FÃøVùîr„¸$Ù×Î0¡ÀÿúÃcLJ³•‹ìB‘Â°UÇºµ§dB}›lÁ¥Jè:]púåß„†ªÙÂ¹¬Â°3Áş§[ze•ÜTYÜ‰Ñ†½ÕMwçƒm= 3b9h1éÔÆkj§™Ë	€©#•0çÂcL†µf0:¢üZ­c´-œJkÌ7ƒ‘c×Ò1R	º~¥5‚
+2¨T¸–>ç&6BcÁÎ&uCû‘TXaâ.`¿;Û` àõ‰ø	D…ìhf/Âá9î¦ÈO’#˜}sAƒhfìÉs4‘fâ"²ÇÕJŸŒE¢†¤µ6¯cr¹jîí]CÆ9à áu;ö£Ëp˜­Ya«NÜL–¯–>™w‘ápU.èuT,<?W+"9?‰Ç¬‘kÀóÄ>$J,I¬Ù5Şà>ÂÏPöe&¥!”5bØÉ¶eÄkÖOÇ™EÜŠèÜº|íÀ¨ğ©Ö½DMïÏj.Î×qgšŞIñç¿¬T1y«zô\F`ƒÊôIíŠ«©R†B³j%­H²0¢·Ğb‡ÙY€,LŸ\Ûô‘†pónñ£oá]ÖkÊõ ĞÄÊ^×ºŞ™ò´
+ûf¶j)08ºÛ"‹ã‹on™|Yå‹YUÚºŠsgQ:Æ?áĞ‡ZüNf¿Òe5T%wg{¨ßDfa÷ÛÊìÈ^W÷QË„¡Û|Öø–ú‘¨Óñ)åè–N©ã«ïVªo—X·¢Uî‰¬IyY€[Ø¶Co"·íÂŒpkbšh¸z¤Ürv½­t­xß­àcö–¹èÛOöXò–Vu´âjŞìz}§¹ÉO¸hèhü.~©ü-kÊiÌˆ”¹öfNï­_ç0 ÏÒ©3÷Î«ã@PFÏji?ÕMËå‘FY¡Ì×,UÎ1¨Ü2 î¥@ô3š}$gÕ~%+J”óo ¦BæÕ#ÕÆïÿıÏÿ%]–0i1¡üğ	“FÿğG/÷J‹Xæ%‘ û:$×²¿½½M¶È{nŞ±¤ØÙŠ×a# [½ô À€>(p„WË‡ÜÀ!lkHæ½=‹B›,Òz"·Ôz3oaoyi;ÍAnó¶ı¿lfÂËÈğEœbş–Ÿ¼İÿËFgU/(Öôi_…“^óÜTkñSÇšö­íØ,m‡Úd»|­Ğ`˜yó…çZ<ÏØ„.@"ØÌrÍû&¿Û3
+ÄdBgğÃ}äRLMÖÛuÜGÊã5¹e[‹÷gŸP—róg2Ğ#m1Æ6a½Mà¼í)şµ°ÜhŠ©ÎâèÂÔşJJ3@vq K"¢sØznèmJ#ïşöü¯†™ëşJ$€ÎÁùpÖ—W—İw£³SÒ¾:=İ  J>"¨©F0E—Ì¦Q’×ÇlŸˆØîQ‘q€ÄÏ(‹ùHØnÊˆA\·&z2<Pï`ÿ»‚›î×U¹Šê…jÎEh¿ö4š›âL²ß”ª÷ñµ—nì>û­û_İô‡İËî% æ¨[¨.Ô‡ÈŒè­úşqtb‰VAä±Zü§ºbbk€šÉßêª‹ê²Ä~*ÔÎnbºUü¯ÏßÀşç1bî€Ş:Ö7w‘«\9_à!cş¦°€ÿÌç/PT¼@ÂïÎ"wH‰'*%k;$ÜmÄú5»Zi=‡¤­±É{×¿‰å<–|*åQ÷UúMÔ÷IQ<ıGdùäö‘øğæ¡'ŸÈ<
+q70ƒ·uu×nµâì¯¬³*ğœÀí†Ö<bx"ğ‰O›±b3k|ø&YÇëZXÂlâÚÌä™ofæ#‹½‰w›è'Wsì,wDÀš'ægµ:ü«BÍ9ã;’'‘:Ô‘ı«ü¦t$ÛEGè‹‚vf1ö½ëùÖ1¢pv»¢GÙJmÜ¥z]ÃØZô0&¦]¶­q‰ÍH ‰|*±µé(ş©ØD>oeÃ@ä›3¼­
+Od tœ/^ÈGâ-`öß9ıçc^ÓU¥âŒÕ™CTd7Wí§ÎÔ`›‰*	¾É%ôª£ÿJ%ò))HS#\DÜ^Ôe’öĞ»CFôƒåâéZA8Öyœ]‰ZÜ$wƒF[–Ø¬¾òUŠìşì–¢WR5mßu=¨Ú7O!·SP.©n˜NãªÕ²j²ø-¯Y-Ó,Öxd(~THFS¥•‹,Êt«*¹pÉ»Ğ(¯q;yZ`ÒNã:Ñ/ÚDòuˆæËâLö$Î¢ağ04¿ì&	ÓR`?è½:8ŞÑ?{èùÑfH! ßş|>V»—Wë¨q#?
+V‹|®¥ğÎåÆ‡ÍôKö©Å~li¶Ê@ïØìW)‹~ùa$˜±pıRlÄQ¤vwŞ8
+«Ğhç7Q+ŞŠÜ¥»pd\Äãb¿§QÖËÉëŞ«Ó¾Æ
+VŞ¿nUäM5{)©D¢5M­ò‰¡ÄÎën¡HÍV!lHY¨8cxÎ^ñ¨È<ÅùøaúèHFJ9:’ûÒv$2s4²s! éá³úcÇ^´KÓ9˜w2¡l–lk¼5™]6sÏ=xÂ%,N¸¾“z3Iƒ&§ç·Q¼÷R±	2Á¢ãïêŒWÁæ‹OT{5™Ğ±÷±y–İ˜K,—>tEIŠ¨ÖÁ­óu	şVhm’I!£èÌÃ[ÎNÊ¡m¯Œ(áš_˜<DïïïÿÔıZcğõßÈz¼Tæ…µguGÀŒ–p¢%*ÚÒ›UÛ›º7%WqO“6§É…+»`U.<3¡.5’ëü[jšå-:L¡`ä¯­±œû¹çŞ7ó˜|Å1a‘Ùÿ©ÿú¤·¯!¶Õ¸*¶Mqf§;¡‰ƒn%bàÌ±2¢åÇîAï§Wd@çëQÎS¯`×Ó(›Æ„‘õ6‚d6VØ1zËØ~A¦Û®2r­Ê¸UÜN157¥ŞS™yX×ÜÄÇi™Ğ,¢¸¬VˆcA@äÎ¹Ğ_¹hÌ^±ÿ¿”íç“ü™TOÕ•›t*Óú–:Y©dW=næQXyÖgRZıÈú¸ Èáê@ìÕÆŒıhê=œ ƒZÇ{gûsÃöÉ<å€éxw¤ X4²àş0ƒ‚HêğùŸ²i¿Éç_:3 &!‹‰Æ½ùE~lç—C²³} R:°ÌiìuÕxÆoÍD…ÊìîKÈÇpWÍBJ	®™Š\«r>{I’–è#¯šó´ÒM#›Mg’ú6H_ù	ÁtöÓÊG›W“œT\w\™z5æöc2·L${Õ¼âäš)%UjÌf7™M!8¾jF²\×¡¡njrVóz™ÌÇğqcaÉ%5HOc¶®­–ËÌü}{ŞL
+ËÊáşü¯›`–ì5—«Ä÷^qy5>^IŒkîı.ù
+gïï+¹RßgÖ–ÎN<—õ’Úèx	Kª3¨à•s R6ùñ­ts_¦›ø2·[/ÓÅ¾‹y)Oóe2‰d@dš—O¼øÀ×
+Æï—™©YUfÆÈS&Yşè:°¢ ˆŞ}–òÜ;˜ÛApmıwd!7Pˆ\ÉûÅŒa—LSïxutñ~K0ÑXJàÒ–/˜m÷÷İ] §<%]w‚üóÌv	HŸğ/º‘MÙ`¾LØÆ¸\ò×ï>Ü>ÿõ—âÊc>w‘M•ªç¡Kwf’æ,I°–9?ò¾ä<Ôl¸šóÔ¾L*Ã'•Dçüˆş‹nòsom*„
+‘6±
+ªdˆìâ&xWshæpo¶§ˆqœ%·´R¡êØ2ÉjC°ğì¿¬ôSÇİ¡†›CC÷®Ö“úiêĞĞÜ‘Aí|¢Ò3Õkî¨‡†­-òÖ¢¸1=Š‚–HIğ>Nî-"Ü8‘Ø"’-*Ó‹Ò
+×Äıeù¼×KØéT7¥Ô¾¸ŠP·úÏßn­¤®uND}U×Éiß%'£½şëÓS@ÌÇ¶?Ù¯¹F•ÖÔŠR©ÕN]©,­Òk5
+Ó+s–¨_€Ë0âbªJÃ¢×8
+~©èZ©1í™ªÌ9ÍŸ})2	:»Š
+¾ÒšÀ³†&‘RDò¯8>=îÿX°öû»ıİ’ó¯¶Ó†y}Ğ?í‡9îîw÷ËŒ´:Š¼]ÏÙÍŒrYWŞ_v‡IÖ•şùûÂ¿Z¶*ÔÓKdı®8ëƒƒı½W…Cøé§ŞNOs×ó93Âñ“İ+7Uòwy¦à,‡]s¤ÈE›L=õAgğ„$)œ]—Êä^/´¶ˆ
+vú;?íör¦…¸¶1s¥Kş>WÄó|,—ÅÊå¶Ã”R‘‰]´„¼¾>İgäµ¦L	XíV¸_Çå«cÕ´ÏŒá¤V|Øb¿ö©"ˆõ"¼ÔßšmH¬Üˆ‹ŸIüOÿõ™`4aîÉÌ‚Rqã3 ö`çj`l\%£°×Û=ÙÕbb^•×@ß,EFEæá½·§Ï «x®Xè?uş§+yOdœDA"X-º}f‘*’+¤¶ è±”òcÜ™JŞ•R¶R?Îm“ı6{ëù6ù[¡V+n¶O©*ê…ç™äZ
+…%?‹âS©)dJ¿zA!>Ğæër¹6zµ$äÚK26u°½4ŠlŠÖ‹°è•ÙôDÙ]Í*?ŞY·õ'p¾ŞÃû…*ï^¦Ê‰÷ IÙÙ@KR_CR®ÑøÏÕC¤ÙS°Ÿ¥®@Mßp®ô•.sŠ\G< –z*tc4Påy©ÕW<ªXCS^®GÓiÍ½ôlc£w"$øXd²—uÇ3õÃn“ª–ÂRşKù‘Mƒ5xã@Xâ¯îô< ¶ß™6Sãz…F•7ãîE›‰Ş¨‘ä´™µÚ5Ï:ğl&v~³	Ë6›Ü1À¨aì³)95”T6§£¦ùWm1z4õQĞMéO4¤@¨6©á¦;GÏœ³x(6-ñÎ9óx(LVÛ‰QRÄ¦¨_.K³_r1	/©R¨ÆSñkM˜#T±øœäJcHrª^Ö¥¦w5Iw°Ô>üãâZ|'Ô(b£íWiwUeÕ9ôßäxÊò”Šv*/2)‚¤ße	…ˆ’÷˜şŠÛğ7	ú8ÿ™Fjë?ñ>û^S•ü$…'ÒÊÀ±”¼%Éè"äSÇ[b•mjš«øúQÀËlËqE¼ß³—0oîv­Â-ä—SÍU¯Ìà),›ùÁ…T;6à‚Œ'şb	5‚*£H=oŒ
+É\^UVÎ~ëEş½Cƒ`ä)åğã©5q·Š•JàM¼ÔßVæĞU®àk`Hfof1f|íF˜Ö®|Éc­JòÒ00#¿ƒ?ª#’	Æ’âa)§Y¾	NÄR/æĞ_1ÅIù8fê‘t£Ú!jLUï¦'.¦øO]ÀİKobëŸ•û¬ğÅR34•s&ê3ìåáŞ]•ÊY¹eî+‹S1I$!‰š¾ÈXJÒfJ¹~îÚ×“«ÔLÈ¤åùæïU¿,^â¸pÚïõû9¿@}?	d
+¯çõÃ&ßÃ2èäQ<jëÄ#½B=½t¸ë7ü_ ŒÖ_÷û—‡äm÷¼{Ñ½$çWoÎ.ÉrÑ¾G†ı^÷M÷ŒŒºïköğ<÷îmw8öñçl–ÉÛDc|E¾$2Ó'ÖœÚ{Œ»N¢Î0U 05¢â¨…Ós¥Ã†Ò+pòOŠ‰&ºëç7~±ï¬ñã8–E¡EŸèÍv•|mØixjÚ 
+BoÎ’a5´”{Ö*ãR¼LÚÇ<2®ú¥•0ã¹íĞq/ù®$‘än.Õ”©+qÆ?¿`Ç1A‹UFnNgÎÜöœ~„~^½Vğ(ºGx&Ş•<º“ë³y°ƒ‚Íhö.Oy¬B™h¥	(U»½5NR'|£Èm«XÆ(Ó#[Œ’ji}—cè“ˆ±F­@”‘$ùíÌÃ™üQúIÜ`pµ—Ğ=çÓå!À=ê ÙúNÙj+Ğ¼9oÕà±UØÿš>éSºë{«‰P0¬å‚{lMV^²èJ&{
+àXC§Ç¯¯zV¾hãŠ{S„Ï&+ï.›y¥\P—ş×=± cØU4¹·Ğ:Üt_ÒÜ«V(P°º%.€]1h=Šÿ.Í²¤ˆœ¨Ì"¤0vã,0ÚĞ€¿o§~¶µA)KUñŒ¼ş¿elwõis)ËÖ±p)	fm˜ƒ³<·KVÚ8—qÍÀ²‚¬šUkÀbö›ã3xª6W•è0°±Á‹"Ã—ƒ‚çö3À íñ+{Û4½•¿’–Án¬Ò9®¼eù­­îS¹uféKõ¿–¤uN…Ã1¦]îÆû	b±Q‚gó×uáØñƒô¢XÔ—a…Ñ‚˜^	,«½XÖoôUÒ0TT¦p(ül˜ >NŸê<ÊÒ€åóÂKZLÿZpRw*<e’Œ|=İÉÜvÑ¡ˆ¸Ó^$«s²³şJõÀøcy÷…$ÒzSj^ûa,¯”‚†q^ËD…ÉÒØß8¨âº±øêÔÓ°\ÔF1ÏöŒ†É„é°M×j /£73¾¬²mUğ÷†”©;±—»so<+ƒºxïğfÂ½úŠMùÈwÙoÚqñ0Ï;éc't	8=T/’İ[`3í°0â~_Ï[ê]
+jK¨7wˆëª™SV^×ò÷XË	k_Ÿd;=ÇÛP`%~–eG¨“94–Gó“/9"nõ—Zê8 TiEõ>°pg€2ÆH®ê7<FÅ‹XÔröÀDa0E);QÂ³ÈÔÕÑ”½r%„SÖ$^Â¸Z!IpdÎ’z’‰Åô ˜&¯*WsV¬èug¬­Tä‡×À‚2ÊnCL‡ÉÓlŸ+ŠwÉÈ›ßzá[X·ôÚdDçiw]Ï}œ{˜³´¸K§€/€Øc^Á£Ènğ3¼µÿlXÆ[ºLXæŒr—?'?½rk?Oª5ôqG’ÇKNQXèH­TZÚ¯â–Åoø(¶ç
+f·¦¯\ï–: ¡Ó›%š…}ï¾F˜næ‚­Ğ|‹^Eû@M„Œ|×”â³À
+ˆÍòéâccJ(Ğ€9A?}£7ÄÀŒù*yÀFÓĞx2sö¾0F{:øæ4;^4TÄ`ÁŠ_Æ›lÏËÒ/íü·Õº¹)M-¬¬~øõÿ  ÿÿ ^¡â•

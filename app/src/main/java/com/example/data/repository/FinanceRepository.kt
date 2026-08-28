@@ -150,4 +150,8 @@ class FinanceRepository(
     suspend fun syncAllToCloud() {
         syncManager?.syncAllToCloud()
     }
+
+    suspend fun syncProfileToCloud(adminName: String, tagline: String, avatarType: String, avatarUri: String) {
+        syncManager?.syncProfileToCloud(adminName, tagline, avatarType, avatarUri)
+    }
 }
