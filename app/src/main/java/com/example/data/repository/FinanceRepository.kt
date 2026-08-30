@@ -27,6 +27,7 @@ class FinanceRepository(
     suspend fun getAllAccountsDirect(): List<MasterAkunSaldo> {
         return financeDao.getAllAccountsDirect()
     }
+
     val allOrders: Flow<List<TransaksiOrderMasuk>> = financeDao.getAllOrdersFlow()
     val allMutations: Flow<List<MutasiManualKeluarMasuk>> = financeDao.getAllMutationsFlow()
     val allPelanggan: Flow<List<MasterPelanggan>> = financeDao.getAllPelangganFlow()
@@ -60,6 +61,19 @@ class FinanceRepository(
             syncManager?.syncWalletToCloud(updatedAccount)
         } catch (e: Throwable) {
             Log.i("FinanceRepository", "Wallet cloud sync notice: ${e.message}")
+        }
+    }
+
+    suspend fun updateAccount(account: MasterAkunSaldo) {
+        insertAccount(account)
+    }
+
+    suspend fun setSaldoAwal(idAkun: Int, saldoAwal: Double) {
+        val existingList = financeDao.getAllAccountsDirect()
+        val account = existingList.find { it.idAkun == idAkun }
+        if (account != null) {
+            val updated = account.copy(saldoAwal = saldoAwal)
+            insertAccount(updated)
         }
     }
 
@@ -116,6 +130,82 @@ class FinanceRepository(
 
     suspend fun getAllPelangganDirect(): List<MasterPelanggan> {
         return financeDao.getAllPelangganDirect()
+    }
+
+    suspend fun deleteAllPelanggan() {
+        financeDao.deleteAllPelanggan()
+    }
+
+    suspend fun seedDefaultCustomers(forceOverwrite: Boolean = false) {
+        val defaultCustomers = listOf(
+            MasterPelanggan(
+                idPelanggan = 1,
+                namaPelanggan = "Bu Titi",
+                instansi = "SMKN 1 Kaligondang",
+                kontak = "-",
+                alamatInstansi = "SMKN 1 Kaligondang",
+                npwp = "-"
+            ),
+            MasterPelanggan(
+                idPelanggan = 2,
+                namaPelanggan = "Bu Anggit",
+                instansi = "SMKN 1 Kaligondang",
+                kontak = "-",
+                alamatInstansi = "SMKN 1 Kaligondang",
+                npwp = "-"
+            ),
+            MasterPelanggan(
+                idPelanggan = 3,
+                namaPelanggan = "Bu Ratri",
+                instansi = "SMKN 1 Kaligondang",
+                kontak = "-",
+                alamatInstansi = "SMKN 1 Kaligondang",
+                npwp = "-"
+            ),
+            MasterPelanggan(
+                idPelanggan = 4,
+                namaPelanggan = "Bu Widi",
+                instansi = "SMKN 1 Kaligondang",
+                kontak = "-",
+                alamatInstansi = "SMKN 1 Kaligondang",
+                npwp = "-"
+            ),
+            MasterPelanggan(
+                idPelanggan = 5,
+                namaPelanggan = "Akuntansii",
+                instansi = "SMKN 1 Kaligondang",
+                kontak = "-",
+                alamatInstansi = "SMKN 1 Kaligondang",
+                npwp = "-"
+            )
+        )
+
+        // 1. Seed to Cloud and local sync manager if online
+        try {
+            syncManager?.seedDefaultCustomersToCloud(forceOverwrite)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Seed to cloud notice: ${e.message}")
+        }
+
+        // 2. Local Room DB fallback check & ensure default customers
+        try {
+            val existing = financeDao.getAllPelangganDirect()
+            val hasLegacyNames = existing.any { it.namaPelanggan in listOf("AkL", "TiTi", "RatRi", "WiDi") || it.namaPelanggan.contains("Budi", ignoreCase = true) || it.namaPelanggan.contains("Grafika", ignoreCase = true) }
+            val hasAllExpected = listOf("Bu Titi", "Bu Anggit", "Bu Ratri", "Bu Widi", "Akuntansii").all { expected ->
+                existing.any { it.namaPelanggan.equals(expected, ignoreCase = true) }
+            }
+
+            if (forceOverwrite || existing.isEmpty() || hasLegacyNames || !hasAllExpected) {
+                if (forceOverwrite || hasLegacyNames) {
+                    financeDao.deleteAllPelanggan()
+                }
+                for (customer in defaultCustomers) {
+                    financeDao.insertPelanggan(customer)
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e("FinanceRepository", "Error ensuring local default customers: ${e.message}")
+        }
     }
 
     suspend fun insertPelanggan(pelanggan: MasterPelanggan): Int {

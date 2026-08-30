@@ -82,6 +82,9 @@ interface FinanceDao {
     @Query("DELETE FROM master_pelanggan WHERE id_pelanggan = :idPelanggan")
     suspend fun deletePelangganById(idPelanggan: Int)
 
+    @Query("DELETE FROM master_pelanggan")
+    suspend fun deleteAllPelanggan()
+
     // MasterPelanggan Queries
     @Query("SELECT * FROM master_pelanggan ORDER BY nama_pelanggan ASC")
     fun getAllPelangganFlow(): Flow<List<MasterPelanggan>>
@@ -91,6 +94,9 @@ interface FinanceDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPelanggan(pelanggan: MasterPelanggan): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllPelanggan(pelangganList: List<MasterPelanggan>)
 
     @Delete
     suspend fun deletePelanggan(pelanggan: MasterPelanggan)

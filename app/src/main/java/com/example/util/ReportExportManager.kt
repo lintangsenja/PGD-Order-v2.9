@@ -116,16 +116,25 @@ object ReportExportManager {
                 else -> 0.0
             }
 
-            val keluarRiil = mutations.filter { (it.jenisMutasi == "Uang Keluar" || it.jenisMutasi == "Pindah Saldo") && it.idAkun == account.idAkun }
-                .sumOf { it.nominal }
+            val mutasiMasuk = mutations.filter {
+                (it.jenisMutasi == "Uang Masuk" && it.idAkun == account.idAkun) ||
+                (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
+            }.sumOf { it.nominal }
 
-            val sisa = masukPlotting - keluarRiil
-            val serapanPct = if (masukPlotting > 0.0) (keluarRiil / masukPlotting) * 100.0 else if (keluarRiil > 0.0) 100.0 else 0.0
+            val totalMasuk = masukPlotting + mutasiMasuk
+
+            val keluarRiil = mutations.filter {
+                (it.jenisMutasi == "Uang Keluar" && it.idAkun == account.idAkun) ||
+                (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
+            }.sumOf { it.nominal }
+
+            val sisa = totalMasuk - keluarRiil
+            val serapanPct = if (totalMasuk > 0.0) (keluarRiil / totalMasuk) * 100.0 else if (keluarRiil > 0.0) 100.0 else 0.0
 
             AllocationComparisonItem(
                 idAkun = account.idAkun,
                 namaAkun = account.namaAkun,
-                totalMasukPlotting = masukPlotting,
+                totalMasukPlotting = totalMasuk,
                 totalKeluarRiil = keluarRiil,
                 sisaSaldo = sisa,
                 persentaseSerapan = serapanPct

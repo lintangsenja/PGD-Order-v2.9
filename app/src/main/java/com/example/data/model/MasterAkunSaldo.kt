@@ -17,5 +17,8 @@ data class MasterAkunSaldo(
     val persentaseOperasional: Float = 0.0f,
     
     @ColumnInfo(name = "konstan_hpp_unit")
-    val konstanHppUnit: Float = 0.0f
+    val konstanHppUnit: Float = 0.0f,
+
+    @ColumnInfo(name = "saldo_awal", defaultValue = "0.0")
+    val saldoAwal: Double = 0.0
 )

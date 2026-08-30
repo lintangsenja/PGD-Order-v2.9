@@ -2344,7 +2344,7 @@ fun DashboardTab(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Kotak 1: Terplotting
+                        // Kotak 1: Total Alokasi & Masuk
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -2355,22 +2355,22 @@ fun DashboardTab(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Terplotting",
+                                    text = "Alokasi & Masuk",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF554B6E)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = formatRupiah(summary.grandTotalPlotting),
+                                    text = formatRupiah(summary.grandTotalAlokasiDanMasuk),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF3B2369)
+                                    color = Color(0xFF166534)
                                 )
                             }
                         }
                         
-                        // Kotak 2: Penyesuaian
+                        // Kotak 2: Pengeluaran Riil
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -2381,17 +2381,17 @@ fun DashboardTab(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Penyesuaian",
+                                    text = "Pengeluaran Riil",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF554B6E)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = (if (summary.grandTotalMutasi >= 0) "+" else "") + formatRupiah(summary.grandTotalMutasi),
+                                    text = formatRupiah(summary.grandTotalMutasiKeluar),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = if (summary.grandTotalMutasi >= 0) Color(0xFF166534) else Color(0xFFC62828)
+                                    color = if (summary.grandTotalMutasiKeluar > 0) Color(0xFFC62828) else Color(0xFF554B6E)
                                 )
                             }
                         }
@@ -4321,6 +4321,144 @@ fun DompetScreen(
 }
 
 @Composable
+fun SetSaldoAwalDialog(
+    account: MasterAkunSaldo,
+    currentBalance: Double,
+    viewModel: FinanceViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var saldoAwalText by remember { mutableStateOf(if (account.saldoAwal > 0) "%.0f".format(account.saldoAwal) else "") }
+    var catatSebagaiMutasi by remember { mutableStateOf(true) }
+    var showErrorAlert by remember { mutableStateOf(false) }
+
+    val cleanName = account.namaAkun.replace("Dompet ", "", ignoreCase = true)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color(0xFFE8F5E9), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.AccountBalance,
+                        contentDescription = null,
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Set Saldo / Modal Awal",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Pos: $cleanName",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Masukkan nominal saldo/modal awal untuk pos kas ini. Data ini akan tersimpan permanen ke database lokal & Firebase Firestore.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = saldoAwalText,
+                    onValueChange = { saldoAwalText = it; showErrorAlert = false },
+                    label = { Text("Nominal Saldo Awal (Rp)") },
+                    placeholder = { Text("Contoh: 1.350.000 atau 500000") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_saldo_awal_nominal"),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    leadingIcon = { Icon(Icons.Default.LocalOffer, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                val parsed = parseDoubleInput(saldoAwalText) ?: 0.0
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFFF1F8E9),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Color(0xFFC8E6C9))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Terbaca:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32))
+                        Text(
+                            formatRupiah(parsed),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF2E7D32)
+                        )
+                    }
+                }
+
+                if (showErrorAlert) {
+                    Text(
+                        text = "Harap masukkan nominal angka yang valid (>= 0)!",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val nominal = parseDoubleInput(saldoAwalText)
+                    if (nominal != null && nominal >= 0.0) {
+                        viewModel.setSaldoAwalAkun(
+                            idAkun = account.idAkun,
+                            saldoAwal = nominal,
+                            catatMutasi = false,
+                            keterangan = "Saldo Awal $cleanName"
+                        )
+                        Toast.makeText(context, "Saldo awal $cleanName berhasil disimpan & disinkronkan!", Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    } else {
+                        showErrorAlert = true
+                    }
+                },
+                shape = RoundedCornerShape(100.dp),
+                modifier = Modifier.testTag("dialog_submit_saldo_awal")
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Simpan Saldo Awal", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        }
+    )
+}
+
+@Composable
 fun WalletEnvelopesSection(
     rows: List<AccountDashboardRow>,
     viewModel: FinanceViewModel,
@@ -4330,6 +4468,7 @@ fun WalletEnvelopesSection(
     val allAccounts by viewModel.allAccounts.collectAsStateWithLifecycle(emptyList())
     var activeQuickMutation by remember { mutableStateOf<QuickMutationConfig?>(null) }
     var selectedPosKasDetail by remember { mutableStateOf<AccountDashboardRow?>(null) }
+    var accountForSaldoAwal by remember { mutableStateOf<MasterAkunSaldo?>(null) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -4448,8 +4587,13 @@ fun WalletEnvelopesSection(
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = colorScheme.onSurface
                                         )
+                                        val subLabel = if (row.saldoAwal > 0) {
+                                            "Awal: ${formatRupiah(row.saldoAwal)} â€¢ Alokasi: ${formatRupiah(row.saldoTerplotting)} â€¢ Mutasi: ${if (row.mutasiPenyesuain >= 0) "+" else ""}${formatRupiah(row.mutasiPenyesuain)}"
+                                        } else {
+                                            "Alokasi: ${formatRupiah(row.saldoTerplotting)} â€¢ Mutasi: ${if (row.mutasiPenyesuain >= 0) "+" else ""}${formatRupiah(row.mutasiPenyesuain)}"
+                                        }
                                         Text(
-                                            text = "Alokasi: ${formatRupiah(row.saldoTerplotting)} * Mutasi: ${if (row.mutasiPenyesuain >= 0) "+" else ""}${formatRupiah(row.mutasiPenyesuain)}",
+                                            text = subLabel,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                         )
@@ -4464,11 +4608,36 @@ fun WalletEnvelopesSection(
                                 )
                             }
 
-                            // Quick Action Buttons (Masuk, Keluar, Mutasi)
+                            // Quick Action Buttons (Saldo Awal, Masuk, Keluar, Mutasi)
+                            val targetAccObj = allAccounts.find { it.idAkun == row.idAkun } ?: MasterAkunSaldo(idAkun = row.idAkun, namaAkun = row.namaAkun, saldoAwal = row.saldoAwal)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
+                                // 0. Saldo Awal / Modal
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1.1f)
+                                        .height(28.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            accountForSaldoAwal = targetAccObj
+                                        }
+                                        .testTag("btn_quick_modal_${row.namaAkun.replace(" ", "_").lowercase()}"),
+                                    color = Color(0xFFF3E5F5),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.AccountBalance, contentDescription = null, tint = Color(0xFF7B1FA2), modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("Modal", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF7B1FA2))
+                                    }
+                                }
+
                                 // 1. Masuk
                                 Surface(
                                     modifier = Modifier
@@ -4490,8 +4659,8 @@ fun WalletEnvelopesSection(
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.AddCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Icon(Icons.Default.AddCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
                                         Text("Masuk", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                                     }
                                 }
@@ -4517,8 +4686,8 @@ fun WalletEnvelopesSection(
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.RemoveCircle, contentDescription = null, tint = Color(0xFFC62828), modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Icon(Icons.Default.RemoveCircle, contentDescription = null, tint = Color(0xFFC62828), modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
                                         Text("Keluar", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
                                     }
                                 }
@@ -4544,8 +4713,8 @@ fun WalletEnvelopesSection(
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = colorScheme.onPrimaryContainer, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = colorScheme.onPrimaryContainer, modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
                                         Text("Mutasi", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = colorScheme.onPrimaryContainer)
                                     }
                                 }
@@ -4572,6 +4741,16 @@ fun WalletEnvelopesSection(
             account = selectedPosKasDetail!!,
             viewModel = viewModel,
             onDismiss = { selectedPosKasDetail = null }
+        )
+    }
+
+    if (accountForSaldoAwal != null) {
+        val targetRow = rows.find { it.idAkun == accountForSaldoAwal!!.idAkun }
+        SetSaldoAwalDialog(
+            account = accountForSaldoAwal!!,
+            currentBalance = targetRow?.sisaSaldoRiil ?: 0.0,
+            viewModel = viewModel,
+            onDismiss = { accountForSaldoAwal = null }
         )
     }
 }
@@ -6987,6 +7166,61 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
     var editingSatuanHarga by remember { mutableStateOf<MasterSatuanHarga?>(null) }
     var editNamaSatuan by remember { mutableStateOf("") }
     var editOpsiHargaDefaultText by remember { mutableStateOf("") }
+    var showSeedCustomersDialog by remember { mutableStateOf(false) }
+
+    // Seed Customers Confirmation Dialog
+    if (showSeedCustomersDialog) {
+        AlertDialog(
+            onDismissRequest = { showSeedCustomersDialog = false },
+            title = { Text("Muat Data Default Pelanggan", fontWeight = FontWeight.Bold, color = colorScheme.onSurface) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Sistem akan membersihkan seluruh data pelanggan lama di Firestore & database lokal, kemudian mengisi 5 data pelanggan bawaan (SMKN 1 Kaligondang):",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        color = colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("â€¢ Bu Titi (SMKN 1 Kaligondang)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text("â€¢ Bu Anggit (SMKN 1 Kaligondang)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text("â€¢ Bu Ratri (SMKN 1 Kaligondang)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text("â€¢ Bu Widi (SMKN 1 Kaligondang)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text("â€¢ Akuntansii (SMKN 1 Kaligondang)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Text(
+                        text = "Apakah Anda yakin ingin memuat data default?",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.primary
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.resetAndSeedCustomers(forceOverwrite = true)
+                        showSeedCustomersDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Ya, Muat Data")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSeedCustomersDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 
     // Edit Pelanggan Dialog
     if (editingPelanggan != null) {
@@ -7341,7 +7575,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                                 Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
                             }
                             Spacer(modifier = Modifier.width(8.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "Master Pelanggan",
                                     style = MaterialTheme.typography.titleLarge,
@@ -7353,6 +7587,19 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colorScheme.onSurfaceVariant
                                 )
+                            }
+                            FilledTonalButton(
+                                onClick = { showSeedCustomersDialog = true },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color(0xFFEDE4FF),
+                                    contentColor = Color(0xFF6B46C1)
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Seed Data", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -9889,308 +10136,17 @@ fun exportToExcel(
         writer.write("Total Omzet:\t${formatRupiah(totalOmzet)}\n")
         writer.write("Total Pengeluaran Mutasi:\t${formatRupiah(totalMutationOut)}\n\n")
         
-        writer.write("HISTORI TRANSAKSI GABUNGAN\n")
-        writer.write("Tanggal\tJenis Transaksi\tDeskripsi/Keterangan\tNominal Kas\n")
-        
-        combinedList.forEach { item ->
-            val nomStr = if (item.nominal >= 0) "+${formatRupiah(item.nominal)}" else "-${formatRupiah(-item.nominal)}"
-            writer.write("${item.tanggal}\t${item.jenis}\t${item.deskripsi}\t$nomStr\n")
-        }
-        writer.flush()
-    }
-    
-    if (uri != null) {
-        onExportSuccess(fileName, uri, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    } else {
-        Toast.makeText(context, "Gagal mengekspor Excel", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun exportToPdf(
-    context: Context,
-    startDate: String,
-    endDate: String,
-    totalUnits: Int,
-    totalOmzet: Double,
-    totalMutationOut: Double,
-    combinedList: List<CombinedHistoryItem>,
-    onExportSuccess: (String, Uri, String) -> Unit
-) {
-    val fileName = "Laporan_Pembukuan_${startDate}_to_${endDate}.pdf"
-    val uri = saveExportedFile(context, fileName, "application/pdf") { outputStream ->
-        val pdfDocument = PdfDocument()
-        val titlePaint = Paint().apply {
-            color = android.graphics.Color.BLACK
-            textSize = 18f
-            isFakeBoldText = true
-        }
-        val subTitlePaint = Paint().apply {
-            color = android.graphics.Color.DKGRAY
-            textSize = 12f
-        }
-        val headerPaint = Paint().apply {
-            color = android.graphics.Color.BLACK
-            textSize = 11f
-            isFakeBoldText = true
-        }
-        val bodyPaint = Paint().apply {
-            color = android.graphics.Color.BLACK
-            textSize = 10f
-        }
-        val linePaint = Paint().apply {
-            color = android.graphics.Color.LTGRAY
-            strokeWidth = 1f
-        }
-
-        var pageNum = 1
-        var pageInfo = PdfDocument.PageInfo.Builder(595, 842, pageNum).create()
-        var page = pdfDocument.startPage(pageInfo)
-        var canvas = page.canvas
-
-        var y = 40f
-        canvas.drawText("LAPORAN PEMBUKUAN PGD ORDER (2020-2026)", 40f, y, titlePaint)
-        y += 20f
-        canvas.drawText("Rentang Tanggal: $startDate s.d $endDate (Periode Aktif 2020-2026)", 40f, y, subTitlePaint)
-        y += 30f
-
-        // Rekapitulasi Section
-        canvas.drawText("REKAPITULASI PERFORMA (2020-2026)", 40f, y, headerPaint)
-        y += 15f
-        canvas.drawText("* Total Unit Terproduksi: $totalUnits pcs", 50f, y, bodyPaint)
-        y += 15f
-        canvas.drawText("* Total Omzet: ${formatRupiah(totalOmzet)}", 50f, y, bodyPaint)
-        y += 15f
-        canvas.drawText("* Total Pengeluaran Mutasi: ${formatRupiah(totalMutationOut)}", 50f, y, bodyPaint)
-        y += 35f
-
-        // Table Title
-        canvas.drawText("HISTORI TRANSAKSI GABUNGAN", 40f, y, headerPaint)
-        y += 20f
-
-        // Table Header
-        canvas.drawText("Tanggal", 40f, y, headerPaint)
-        canvas.drawText("Jenis", 120f, y, headerPaint)
-        canvas.drawText("Deskripsi / Keterangan", 200f, y, headerPaint)
-        canvas.drawText("Nominal Kas", 460f, y, headerPaint)
-        y += 5f
-        canvas.drawLine(40f, y, 550f, y, linePaint)
-        y += 15f
-
-        // Table Rows
-        combinedList.forEach { item ->
-            if (y > 800f) {
-                pdfDocument.finishPage(page)
-                pageNum++
-                pageInfo = PdfDocument.PageInfo.Builder(595, 842, pageNum).create()
-                page = pdfDocument.startPage(pageInfo)
-                canvas = page.canvas
-                y = 40f
-                
-                canvas.drawText("Tanggal", 40f, y, headerPaint)
-                canvas.drawText("Jenis", 120f, y, headerPaint)
-                canvas.drawText("Deskripsi / Keterangan", 200f, y, headerPaint)
-                canvas.drawText("Nominal Kas", 460f, y, headerPaint)
-                y += 5f
-                canvas.drawLine(40f, y, 550f, y, linePaint)
-                y += 15f
-            }
-
-            canvas.drawText(item.tanggal, 40f, y, bodyPaint)
-            canvas.drawText(item.jenis, 120f, y, bodyPaint)
-            
-            val desc = if (item.deskripsi.length > 35) item.deskripsi.take(32) + "..." else item.deskripsi
-            canvas.drawText(desc, 200f, y, bodyPaint)
-            
-            val nomText = if (item.nominal >= 0) "+" + formatRupiah(item.nominal) else "-" + formatRupiah(-item.nominal)
-            canvas.drawText(nomText, 460f, y, bodyPaint)
-            
-            y += 18f
-            canvas.drawLine(40f, y - 12f, 550f, y - 12f, linePaint)
-        }
-
-        pdfDocument.finishPage(page)
-        pdfDocument.writeTo(outputStream)
-        pdfDocument.close()
-    }
-    
-    if (uri != null) {
-        onExportSuccess(fileName, uri, "application/pdf")
-    } else {
-        Toast.makeText(context, "Gagal mengekspor PDF", Toast.LENGTH_SHORT).show()
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun OrderDatePickerDialog(
-    onDateSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val datePickerState = rememberDatePickerState(
-        yearRange = 2020..2026
-    )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                val selectedDateMillis = datePickerState.selectedDateMillis
-                if (selectedDateMillis != null) {
-                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
-                    val dateStr = sdf.format(Date(selectedDateMillis))
-                    onDateSelected(dateStr)
-                }
-                onDismiss()
-            }) {
-                Text("OK")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Batal")
-            }
-        }
-    ) {
-        DatePicker(state = datePickerState)
-    }
-}
-
-@Composable
-fun BackupRestoreTab(viewModel: FinanceViewModel) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    
-    val backupsList by viewModel.backupsList.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
-    val isCloudOnline by viewModel.isCloudOnline.collectAsStateWithLifecycle()
-    val cloudLastSyncTime by viewModel.cloudLastSyncTime.collectAsStateWithLifecycle()
-    val syncStatusText by viewModel.syncStatusText.collectAsStateWithLifecycle()
-    
-    LaunchedEffect(Unit) {
-        viewModel.loadBackupFiles(context)
-    }
-    
-    val createDocumentLauncher = rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
-            coroutineScope.launch {
-                try {
-                    val jsonStr = viewModel.generateBackupJsonString()
-                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                        outputStream.write(jsonStr.toByteArray())
-                    }
-                    android.widget.Toast.makeText(context, "Cadangan berhasil disimpan secara eksternal!", android.widget.Toast.LENGTH_SHORT).show()
-                    viewModel.createLocalBackup(context)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    android.widget.Toast.makeText(context, "Gagal menyimpan cadangan: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
-                }
-            }
-        }
-    }
-    
-    val openDocumentLauncher = rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            coroutineScope.launch {
-                try {
-                    val jsonStr = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                        inputStream.bufferedReader().use { it.readText() }
-                    } ?: ""
-                    
-                    if (jsonStr.isNotEmpty()) {
-                        val success = viewModel.restoreFromJsonString(jsonStr)
-                        if (success) {
-                            android.widget.Toast.makeText(context, "Data berhasil dipulihkan!", android.widget.Toast.LENGTH_SHORT).show()
-                            viewModel.loadBackupFiles(context)
-                        } else {
-                            android.widget.Toast.makeText(context, "Format berkas cadangan tidak valid!", android.widget.Toast.LENGTH_LONG).show()
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    android.widget.Toast.makeText(context, "Gagal memulihkan data: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
-                }
-            }
-        }
-    }
-    
-    var fileToDelete by remember { mutableStateOf<BackupFile?>(null) }
-    var fileToRestoreDirectly by remember { mutableStateOf<BackupFile?>(null) }
-    
-    if (fileToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { fileToDelete = null },
-            title = { Text("Hapus Cadangan", fontWeight = FontWeight.Bold, color = Color(0xFF3B2369)) },
-            text = { Text("Apakah Anda yakin ingin menghapus berkas cadangan '${fileToDelete?.name}'? Berkas akan dihapus permanen dari penyimpanan lokal.", color = Color(0xFF554B6E)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        fileToDelete?.let {
-                            viewModel.deleteBackupFile(context, it)
-                            android.widget.Toast.makeText(context, "Cadangan lokal dihapus.", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                        fileToDelete = null
-                    }
-                ) {
-                    Text("Hapus", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { fileToDelete = null }) {
-                    Text("Batal", color = Color(0xFF554B6E))
-                }
-            }
-        )
-    }
-
-    if (fileToRestoreDirectly != null) {
-        AlertDialog(
-            onDismissRequest = { fileToRestoreDirectly = null },
-            title = { Text("Pulihkan Data", fontWeight = FontWeight.Bold, color = Color(0xFF3B2369)) },
-            text = { Text("Apakah Anda yakin ingin memulihkan seluruh data dari berkas '${fileToRestoreDirectly?.name}'? Seluruh tabel saat ini akan digabungkan/digantikan dengan isi berkas cadangan.", color = Color(0xFF554B6E)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        fileToRestoreDirectly?.let { backupFile ->
-                            coroutineScope.launch {
-                                try {
-                                    val file = java.io.File(backupFile.absolutePath)
-                                    val jsonStr = file.readText()
-                                    val success = viewModel.restoreFromJsonString(jsonStr)
-                                    if (success) {
-                                        android.widget.Toast.makeText(context, "Berhasil memulihkan data dari cadangan lokal!", android.widget.Toast.LENGTH_SHORT).show()
-                                        viewModel.loadBackupFiles(context)
-                                    } else {
-                                        android.widget.Toast.makeText(context, "Gagal memulihkan, format berkas tidak valid.", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                    android.widget.Toast.makeText(context, "Gagal: ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                        fileToRestoreDirectly = null
-                    }
-                ) {
-                    Text("Pulihkan", color = Color(0xFF6A4C93), fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { fileToRestoreDirectly = null }) {
-                    Text("Batal", color = Color(0xFF554B6E))
-                }
-            }
-        )
-    }
-
-  xœä[ënÛ8şß§à»€<›*Í¥™Î »@|Kº“L‚Øm´DÛË¢ QIÜ"À>Ë>Ú>ÉCI¶,‰ºÅ™í`ÏT)ŠçşC•¾pÂ•k¼!1­„Ígœùäïä:¾ÜŒ!™3î8×ôiÌ¿2£»;äQÛæîÜ8:3m¯{°|`¾äuÎ}Ÿºs¶b®„åS¿ÌÀ£³{ëøQõd—|Û¬pxHFÜgS0ÒwDh“ñÚµ¾pùW*¹pIŸúöf:ş0vöVÅVšµ/Ü–‹oj\²@NèÜèL©µ½{wrÀNî-xc'Å2R° ƒŞ‰Ğµ™İ¾Ëü1Ş4ßíJÉğ˜»°˜¸p_–p%å°†úñ_óË‚K–Yk*|[1ÛScé‹%3à¥ÑSÆ»§Ñhx:8ıÔÍ<ËöÉ´`+ÃdĞ°£ÛÃÔìãî²úSJÉXZÕÔQš£3Á„š˜â.;E,!İ‰Ç<O¾2,ä··³E‡ÏİdƒÉµÙ‡?ÌÿÏqÖÅk,„Ï¿¢¹”0:FF{L>2ææ)â´”Û}í¼îî·jz—SSH=ñ¤g©®Y¦É0*êw´3Ùr¸g‡Èğj,€ahîãÆÖ©G'Ãáè<ëÔYÂXb,Ó”öù2±"}„ÅËe‹ÄWtÎ>3KªPÆgÄàuğŞ®Z"0ãÈcâmKû£i*Ü¸ÄÂìT54.‹æŞÌfå¢I‰gÀËç^Ş:›„êT¯"¹ìV7gç§ıŸO*TƒT;”mçƒR–ô£ÏÚ‘(6WèuÂdµ^%ÌBa¹»ÄüĞ€G9»†Ä¹v0e^S0@NÉ¼İ”kOÌ}ê-Ö¦äÒa×Ìæáªzµhñãónh´ùaö„c×±T–Uê;éŸœıÜVúHD˜ñ‰Î˜Ùş¸èš9Ô§Á’º¦iv´®¡6 cäQç­ä+FÎ—’Ïâg:`\Œ€Gàü}¨g*ìõxÑ½xß¿?í÷kÜÏo
-oK*Ã€ô¨=g…sÆ¡?ƒ£WW	¾‹B¸^	ó§ Ù`x:uµªÍÅûhfêöhØK¶PµÛŠXmÅØ2¿­ş`p¬Ine‰¥x …ÌnŒ~P,&Xnœ–ë
-i_È©º9-÷U™¸ä µ:HQBú©ÖQóŞésßr˜ò’š¥PÎìrgæööàäxt<ª ]¯Û£«’X]${1Û¡SæÔÚûÉ¨Z5Æ	¶†wfæÔ¸ç’¿“»u¹qêàO|~‹cú‘n-]`±¤ü'·$¨îLGº”!	",ÆãÓå‚çıóÿ«;	E¼=*{4fİ²ØXíª	ŠÄ'+@W…×íÍãšC$ıHm–USëŠısˆñ…Ì"$¬ØÛ‡–æ@½xD'b5o,€ŒÙ’¢>Ñ¥,+…Ûw À–¿‘Î…;¦ôù|Î|ğPöF—<ëg.:Ì†5~Ø„Rıì¦9Ş\D~tZ]n¦º¢Òš¡®xÌöBÓôRÜŒa3ñ¦59U?ã>ieã#ßD­_Ç‚lùs6Â¨°¾şıI~¨½Nvi.ô¶_&]µæm„šaÕøê3uBì¢è£Ó,Œn×‡Ë`r<‹à1„Ò÷Ö‡èùó£kÃË¡Àm…r# «ëg)P’Jšq«»M[¥¤òQ•1ıâä§2úYu÷°Y'¤° ;ûB›ûhà´ÅxdÜ3ß²lÛf,H35$¯7ğ/h"ıñ×Nß¿íÕ®/Š¥ 
-‚’GA<ŒĞ_“è@ò0éöQKÙR”ƒÍC¹*¡iuĞì`¦ü8P’Rà¨¸2d3şŠJÉì¨fùÊsş©£³º¾¶íûËËÕ*:äJ@šbæœÉØGn×Œ2ğICcÁ–Ï`t ¬Ù»¢¡k-@Lº0:·ƒûl İ÷¢Cá¿ìlÎü=n'¿r²«}º­qŠÇcìö^İv1[Äá}dCEÀ­°i²g{ Ö éY¾®Ì¯>ô.ÜrƒƒoõŠëÕg•²L¢êO#¨¦*N"½JÒ§xb Q´GıPAõGMÅ€.§2?|(ÎúœähÿËrê…ı+êÏ5½Q¤ße#S2Ş„UvÛØ&<æê"…»¾™êy¢^Pô¡Š.dç°$“o®2ºÂ±ìHÿ{Š@qŞº·©¤{
-@ºã÷™o`â˜Ò „‰%·eñ©MıPVZ=¼jìˆG·iô¹¾@¿ Fÿ|§Îşÿ·qg{•Æ„c!¿	“oòü&|ŞñGºN'Š+±¤N†áö‡òõ{zÚŞî´²C>)¼ä0o:w¤!´€\ñ@nîc"‚>Ş7y0\yrmäÈù
-u;ªj°ïóK?¥ ı…Çâ+Ã‹ö ±Iã±Î~j^¢ñ“’na›œtí§òâ5ñ¥sÂG"~ìUVâUzUYûd/]ô2/ .wãê×›E½’´¯@©3¤Ö‚|‹ï8pñö¹»RÛó©}»R7RiïJH­¾´lÜÏ¯éZjnÕ7´	ı‘Ÿ{–"•µ_|^ˆÔ¨ƒµuÓ¥UGhH{;FCú“÷Öù´Aó¿ùw[L5¿Ój†’;fÜÎù4†
-ç¯æÑ*”ĞGş:íÂóòküç_ÿV‹¥fØ›f‘d5„òj_¾éãtBm¾çÄàÑ¨Y!åmñª³Í„ªJİ,YÂ‡Â
-öØ‚*8.zk>‹$ıuƒÙHª‘È•V•Yqa¢e)#¡Ó B‡d·T.ê}­”^‹s0_X_cB=n+?h¾RZVô¹Èö¸8®™G¾Xı3zÆìøÍ^8~E•	um_pk®9“æDP€+ºdŠ[Ä$¸)ÖRdÊü¸ClîÅEÖà»…k\»˜\Ş/oî&]3X€Q7c¬ÖaÏKXº sPÏŠ­<uFÙSû*Øººùí¢Wµg?Ã^$¸‘Á~!Ã'‹©ú¼©ŠË"Vk¿Á•1RC<¶¯Á¾(Ãû—J=‰TÏ*ŸQGpõN‘Êú.w‘oW§¤âL¼Dc3$İÿT¨|¸|F¹<_3¼JpWab/“Ùÿú¨İÆ&\c­·yyøMõ2ß‹Mß/1ÉKê…A[ƒ¬óe'R[ƒ|ùÙlô÷ùÍ  ÿÿ şçw
+        writer.write("HISTORI TRANSAKSIxœì]ërÛ:’şŸ§À¨²;Ô‰Ãø{×$g$KŠ}|‘K’“Ú©T¥`²pD‘´£¤\5Ï2¶O²İà¤x“,ç8»?d‰Fãë@š|hµ¯.>´.>[æ3–;—æêòÖQëæ†šŸÅoÌâ¹ÔòèÌãŸE‡y3—;uÊ Ô£ÖgqaÏ¹EMrJ½ÕøËØ_s‹gÜúÄv»t<%ß	t6'/ßÇÕ°ÜË…KŞ>!VÒ­°‡÷ïÈv“4^<ÿTæT|‡ÓiªNó¾A˜é1Òx™©õ2S-ÕoZÏ¿Ëº"Äıg^ø’ü4"qà¥€ë” î³˜¾7Õ‚
+ÁMùãô]NşòX¾i6É÷¸¡mu¿:¶+†şxÌ<O›p“]Ğ9Û"Ğ`‹4¨ã˜|L·­W·–¡Û³¾ÎÍ`àŞK{2ácfØcÎ,¡{Ë¨áMsS—Cvï¡%l
+“5§36b_…6¶-¡ÇDB€Ü›yÀé~3³±¶8ë^|÷£&taßÅã½ölâ[„ÉìKc¢=ÔCÒ>$Ga'òª'¨+:T°CråÖMp™YÆòEaj^Y\x‡äÄÊÅşüÊÛ¿6™rıÜRh}?sWÕÕC‚Ÿ;
+/ÃÛ]œÀÔ¿*gfçh!Wä
+g'øÑ'ÈÜ³hbQÉ£‰5oœQ B­/—l~íÏ|øöü{<üû/Â†ßá¸ïuÇ˜4b*¨5ïˆGoYÀ3z@7™­D]Rš‚4€bûÂñ°Éhj%"i¨Ó	õº¸L~iÍT=Á…É.)ªá_­©cgE›Éš6®jj®ÍıÆ¥Î”=ıoèí³ÖÑiªaÈ¿¡ˆvŞLR·¸×ÍlÛ¦Ú	„ë³œu‡zşõhC<vN?Zÿ]Èäî¤€…)¬:æ>ºvÖÒµm,¿í"ù˜°¼6ĞûÙhiz<áÚ3ö‰bŠ¨(¸Ä¡7ìÂŸc¥ë'ÖÄN/ı2¼¬·}nÂÔjûo÷·È›×»[¥¦>†UÆ¤¹Dh)‹K—+	jQgé&cjİRÁm=ø•f~7_+Âêè†Kï$x7ÎZ—ıAë‚\vÏÛW§WøíC‡ôî€h»Û»Û/áã 	 d¶ÈbKYÕ	3òâÙ-ëg ã›IBâ<aŒ@=ò<D1¢]2—Û#­™ ë—ËBjİf¸Ø.â+¯^‘›Q‡ß¤'C6F”+a³{Úº<]µ†' “A¯?8oBYºvöK$ñ˜C03÷Éˆ¹k>øP ’ÄXgìAWûaWñ\§£ĞĞe|Ä‚Ã³¡.Ñô›>‹EĞŒÊAåt«˜ØZïí§çtDÁ(©ÅLŸGıÁ	z[§0Ÿ‘ƒ[kw·óú<–õ‹;Õ»ª‡¥vÒŸ†V;»+5‹½nòŠ$~7ĞÙİ^‰â§#ë•ÒÉ×†3 k-ø~4«1„ç¨Ô²„ö·Nx€ò‚¼'o`äÍŒqÀ¢âê„ƒ´§1°6—+HıâEîM¡¾JsäO>ƒşÙJY•j««raûz*]Ø|MÕ.¤·ŠŠ'ÂK«zñÚ*Ÿ¢¹“!ª¸yÌ«!g29hYØX†§Ê\´]
+¸!«áv×ê&`=xNïœ›$sO€s©íí6ÉÒĞu=»Ó•JyÆn•™®Ë-Ú¡?[˜h OÅ‚(?°T+!(å=dBÑ±:ìj‘‰eòõŒ¼Äx"Ö¶ègÎ)jUşÔJ2/1²55Ì¯96m=ZêB¤MD\vz5Óï;âÄÒ€?pCqxà­ j»œš{-‡Á‘ôšÏş¡¿c{h²dê¢ïŒ {ÉÇ3øõí-Làõ!3ÁùdFœ	ˆƒÿ(aĞáŞœËTA~^Àˆ©zÊïˆËæl~­ö+ïh‰eÔ n`eôauXy;s>Ç)~ìŸ>ópQÅ—¶mM¸;oûBØTIÛ]œ–à–f[G0¥³¥*Ñà¼P<ÈĞ97M†-3b}¹Ò-ÔºZ9J¸Ä1.‡|î˜[öäú×(/ÏÏ_¨Ğ™=¦&Ó¯†ËÀhèÔæ¶…"ÿŞRİÜÔGáEı†‰è»Ö¸5ò	Eód;‘l Gr–3Àf>™´êi!Ååº÷KWâ¹Îø+÷y",lÿ43˜„ê}¢1F@v‰y)î»Ma¡wh¼Ò:Ñ{ÍSFÙTLÈ¬õ6Ï|gÀ0çÇÀkÕn9»;‡˜ÂÚkÌ>FWÔT’¥øª%e¦û\wL*p’u©caÂSû®(¤Ğp‘ê‡cÛQ1à(u#œµ …i»Ãñ”ÉŒbf#ü­+÷Å®åğ<ô¹Éõ‚ÄƒÓ•Ø•ªåˆ“tÇ½áÂ¾¥ÛÆ—3-?q1=ã6^ŒÍ4™#Óö¾…f-KJ¹U“Ü[œü#¸ Ó$—n×$ëAu¬à{ÒïHÑLß« ()Qß‚¹0º¸!44 ªÎ&¤M›bN×‹,_¤²É¨eÄê¼«(Mt	°®5ü–‹¨µoŠÄ m—SZKÃºº++ëQ=Mä(¼ìéG)F´”ÿİ³£L<£Ë „v%^DÀªõº)Ç“ƒÂÍ&c©‚œ… iß0bÁ9ÿÔ ıÍ‰ß"1Ó-°Í[æÊ]—¾âBá`š¿ê>:2…IölQë…Q!Ëº°ÛÁZ®KZXw,Q¢ô`“ôB_êˆ2ò" .SêqŒ$\ñØ˜º”€˜~ñ_À@æ’-t¹–&#Y‘Rc$3VòÔøÀO0ë;”;NªU‘¥gº³²¢#PÎ¼x|ñÄ®æ"É8&¾@‘şçàæ‚«}_!¡³şÅ‡Bİ—Z7eÙ£Î=EßWØĞÊ/[§'Vş2åV­UªTÓ¯}Àp—™^Ğš%¡ã6«Ô¡fÁÂ¼'¿’F#÷^îE”`Ü»°EwîDƒDBñ‚è+…znàÔô\{®@^H=¥D,„äÊzÅRwa‡FUÌq|“OgÔz8ÈÄ2¨gOóÊR(ú‘uF½@ˆàáDq£jÌ¥°ó\Ó8<	8‡³^9ıã°Ô•Ûä#»”>c¢°˜ç¾À@úsıÉßúõ½@Ù}†L2t¸ş¹Xƒ^è'~[Ù¦?·ÄÛŸp‰óçá×ÔuàÀ<§_qÃ5#İ¡†Ë|j»ü›)Üì<Ğ§™Äm ’\6]ë†…›ÿÊ/İs`şöBË6±ö2èFnäÊo©éÃj‹(Ç.Ek¯^E;w‡Dúşıtàjb´ØÜH+êumiús¤	Hnk
+÷Qñ¦T\Û·f@¼â/j»Ûé'‡ğ
+¹è°	ûèéà4rW: 
+ÆÍ=
+·¯ƒİêOSI½k³LP­-¿å¶¶o-µí¯½^÷u§Õû¯fN{Ğâ[étç±ÔnjFp¹«ÔŞç%*yˆUÊ*‘GŠ·ó&_~XVÑ»e.‹8Å2 d(DËu4$*É:*fzˆL·™¸cÌ*¦Şä7VD%ú®Ás?†uÌE.™2{\*Õû/G]©$S¹;•u…¥m-–*È,*º‡ú:_ÙrŒMîh9¸(lM"˜}¹q‘ˆ–¬õŞ^·Ûkå­õl	A¸l&KiT‰Ë	tR-w,|ü#`ºŸæT³:MIÊÓC€Òå­&U¥ß•s³?™TË@‘C‡yc—;!¼¡y­×\G‘r8N&å õúèí^¸™”\îìíöv{5¦
+KşH½Û}]KïÊkäû‚Q	`¼Æ|Kç­Ø‚¼gcÈ­™k[ÜÃÓ8)ïñ0èhÔ“Œ'ær&S,[ùZèò€Ò93¸?¯Gq*ñ‰ñ›)²Ø‹èx>®®R)æ[Nö^{wïàíCç	ËÊBt3L·6Aæ#Š G!¥ùÕÊÖì²:7F{ù×>´üÏà,Vtzc&ëëmjÎp‹t8§uWa$ïÒe¸sp°¿÷úaË°H5†lÎQ=mß)¼1ôİ	F`¥=–x±;^¬Z–½Ûé¾îU‰³ãÚÙ;Úïv«ŒY2q§Hª­$ì.¿¹ßÕ—KE¾ Kİ8ö<½Ø˜ŒèeG¸è6•Á(V’*k]éùa)sÙÓ±â¶œI%;¨V%,›ô/±¬äcVÒÇôyÒ>ªßô_–œ•z%Jà^VÁÚ5d*`ÈfxêôfSöÈ¤×Ì\Á =†ÎÌ61™£hQ9WV‡ßrÌiç˜‚ ñ mg¡QÓ™R¸½­LšÍ|¢FàÕê©ù':>§³)wIèHV(ü¦¯åÉŞßİ>è–„èóò®<Ÿ´MjÍÈwÒh3RˆƒÓ†zÀä1Å°ş2_=B¨»™[œÊÎÍŸ¶fy¹epìÃŒ4Æ2¸›Êü3“úÿ;“šï!YùŠì¨Õiáã v—İó«³“cø~ŞºèœNJ`l[X“	¨‰ğì6ìÀ¸JlÅzkz5sıí_UÚ\ò]bºğ‰{~m›¤íSAâs"göŒš…­ÂÃ}¥XYvV4[Š6²W8?’-+lfGeåÃ4&
+IİŞ¾nnk;–Îú[ÜQ©µÕ½ªâm^v²å-¥²¹ğX²_î¯j¸“è íL*B¦²DËnÍDªt°`bûr-–=ÖßB©×–Æ´ô–µLQ{kb¶8 }Sİ—Ş•á«åª€„ßƒê½›zÁldS0Z#­gë&ÂËÌàšb,%±$Æ£<¡ñÛ°QX»ïLîa<ğ 'èÜ)<ü~n_çsÏK=:’_c/ÿ4nx¤Mk\~è|	úËó˜)]9[T.ˆÕó²#¨Zí”n(À2~’°xå -F+ü'2V”Œø¿‹ùWs/'Hy™œ‰s!„v£Ã×¹ëg]ĞÌ;YÅ3èıIÎá~pøp&_ı‚ß~?%ÊQf	ˆ dõ@ìm÷ÍÁÑ›2Û€…Y£ÕÃµjà*­0O„ÏŒVÁôZˆUVå‹ö4ÖÈMVbÛ›rl«ŸÏWsGYÍš×|hR·6À­n”˜ìĞ‰ .ğ;º(Î'ä$&óe{ÕİÁikHâäÓYÿ´uFFİÁğäü~kÏ¿«Ïµ¡ÒİçMÀc¥¡VK?Ei'åÁ=İ¶Âÿ IÔÊ	¸Ê2†òMpc9ã—û9&GTyq¯àiƒœ‰Â’ŸE.b²¼—A{É6ôšåàÔİÛŞA¯Sö«å–k'YKÏ4®z–1#Ùòº‘ªGÏÊ,ÜzGËÌVY"<*J¶³¤ëd³ê$Á
+‰òr_úñƒ‰o›ùw5–X2°¡·ó€(d¯úÀÀFs+r·LÊÒc6A&ô#x¨qñn&Ö/VßXÅ²§|ŠŒs^º±ÜSaŸã»³ÉyÅıì8_¸sˆå¡»‡XÖßAÜyÔ§6o6v*ÌÆOsXã©?.ñ<àÚ6ì<j±W±Š>j±ıĞG-Âƒ®?ù£i÷Aq~æÓ‡»åOEåi>‘ØQİÂw`Õj»QË#>QsréW|ÇZêz-l€Û‰ißAz?ü©wM_0·ün¨lyŒÓ¨Q6AÎ§ï$	fÜ“ÿù×¿ÉóïÁ3õÑæQ¼´Eÿ¡ïL[ªB vŸ^7ïÉiû:ÙºƒŠeıs©?¡.?L^'¬³¹‰EÉÕ<V®bJ¬ı8S2ù 3§Lk.…•ÓÂQyˆxØL†ïx’ğî(=d©ã{«Í¡šîd®kW{›>_~¥à˜,MMlÎKnZ&ÀQöå‹Xr^À¸¤&H,»e&”•Ã÷`£¸•s%å¦¾ØŒ7—:
+L^ÔOË¡3:%-Ë dAgÜ"`æà_Ã9•<dS/}ş]Ï¯Òÿ¹ÿë¯Ñn•›<hì0°—w?è…Kê©±BSµÄzùk+±(/"ÌÕˆ:;¦éÁÁgÅZMNë²Mr^/9:Ç+ì­y1”òfÎŞ¯®õ­¹ŞJGk@á[ô(_•o‹IëRù-#—_ƒš¿–ËÇ¼æ²LÓkU3¨²¾Ä†kÙE©]Ê© rÅ¯!ò˜é»şT>6 Pf1†eF˜€Ù0l*Ğñ&¥ÈóÜn(>bß_áwKpåyQîñ,f>]˜[¿Ä»Š,qšÙzozË–â7¿eKôÏ•Høf^në\•€‹^{èvIÅ´æëÔëå¼òŠ·Ú6ø.6µ¬q”K]#ÒÎ¯g^Ø¬ôËæ·KÙ=ü€;–•¹¯"¡ìûÌ¶Â×ÊGëZyÉÛfÏ½ËQUÖZé]oÙR÷İoÙ²’ìÖ{÷ÛFŸXÛÏÉ7zqx’P¸øI¤§äåÙÿîîÜ?û_   ÿÿ Be#Œ

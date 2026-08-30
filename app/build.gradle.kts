@@ -102,6 +102,7 @@ dependencies {
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
+  implementation(libs.firebase.database)
   implementation(libs.kotlinx.coroutines.play.services)
 
   // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google

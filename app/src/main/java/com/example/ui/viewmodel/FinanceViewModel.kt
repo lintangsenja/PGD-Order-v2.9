@@ -38,7 +38,11 @@ data class AccountDashboardRow(
     val namaAkun: String,
     val saldoTerplotting: Double,
     val mutasiPenyesuain: Double,
-    val sisaSaldoRiil: Double
+    val sisaSaldoRiil: Double,
+    val mutasiMasuk: Double = 0.0,
+    val mutasiKeluar: Double = 0.0,
+    val totalAlokasiMasuk: Double = saldoTerplotting + mutasiMasuk,
+    val saldoAwal: Double = 0.0
 )
 
 data class AllocationComparisonItem(
@@ -47,7 +51,9 @@ data class AllocationComparisonItem(
     val totalMasukPlotting: Double,
     val totalKeluarRiil: Double,
     val sisaSaldo: Double,
-    val persentaseSerapan: Double
+    val persentaseSerapan: Double,
+    val saldoAwal: Double = 0.0,
+    val mutasiMasuk: Double = 0.0
 )
 
 data class PosAllocationSummary(
@@ -65,7 +71,11 @@ data class DashboardSummary(
     val rows: List<AccountDashboardRow>,
     val grandTotalPlotting: Double,
     val grandTotalMutasi: Double,
-    val grandTotalSisaRiil: Double
+    val grandTotalSisaRiil: Double,
+    val grandTotalMutasiMasuk: Double = 0.0,
+    val grandTotalMutasiKeluar: Double = 0.0,
+    val grandTotalAlokasiDanMasuk: Double = grandTotalPlotting + grandTotalMutasiMasuk,
+    val grandTotalSaldoAwal: Double = 0.0
 )
 
 class FinanceViewModel(application: Application) : AndroidViewModel(application) {
@@ -313,18 +323,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
 
-                val existingPelanggan = repository.getAllPelangganDirect()
-                if (existingPelanggan.isEmpty()) {
-                    val defaultNames = listOf("AkL", "TiTi", "RatRi", "WiDi")
-                    defaultNames.forEachIndexed { index, name ->
-                        repository.insertPelanggan(
-                            MasterPelanggan(
-                                idPelanggan = index + 1,
-                                namaPelanggan = name
-                            )
-                        )
-                    }
-                }
+                // Inisialisasi seed data default untuk Master Pelanggan
+                repository.seedDefaultCustomers(forceOverwrite = false)
             } catch (e: Exception) {
                 Log.e("FinanceViewModel", "Error initializing master data: ${e.message}")
             }
@@ -364,28 +364,29 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
         dashboardSummary = combine(allAccounts, allOrders, allMutations) { accounts, orders, mutations ->
             // Extract the dynamic rates from MasterAkunSaldo table (with default fallbacks)
-            val kertasHpp = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
-            val tintaHpp = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
-            val pengemasanHpp = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
-            val wastePct = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
-            val tenagaKerjaPct = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
-            val listrikPct = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
-            val maintenancePct = accounts.find { it.namaAkun == "Maintenance Alat" || it.namaAkun == "Dompet Maintenance" }?.persentaseOperasional?.toDouble() ?: 0.05
+            val kertasHpp = accounts.find { it.namaAkun.contains("Kertas", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 106.0
+            val tintaHpp = accounts.find { it.namaAkun.contains("Tinta", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 25.0
+            val pengemasanHpp = accounts.find { it.namaAkun.contains("Pengemasan", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 300.0
+            val wastePct = accounts.find { it.namaAkun.contains("Waste", ignoreCase = true) || it.namaAkun.contains("Rusak", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+            val tenagaKerjaPct = accounts.find { it.namaAkun.contains("Tenaga", ignoreCase = true) || it.namaAkun.contains("Gaji", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.07
+            val listrikPct = accounts.find { it.namaAkun.contains("Listrik", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.02
+            val maintenancePct = accounts.find { it.namaAkun.contains("Maintenance", ignoreCase = true) || it.namaAkun.contains("Alat", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
 
             val rows = accounts.map { account ->
                 // Filter only Lunas orders for Saldo Terplotting calculation to support status-based calculations and rollbacks
-                val lunasOrders = orders.filter { it.status == "Lunas" }
+                val lunasOrders = orders.filter { it.status.equals("Lunas", ignoreCase = true) }
+                val name = account.namaAkun
 
                 // 1. Calculate Saldo Terplotting based on autoplotting triggers with dynamic configuration
-                val saldoTerplotting = when (account.namaAkun) {
-                    "Kertas", "Dompet Kertas" -> lunasOrders.sumOf { it.qtyOrder.toDouble() * kertasHpp }
-                    "Tinta", "Dompet Tinta" -> lunasOrders.sumOf { it.qtyOrder.toDouble() * tintaHpp }
-                    "Pengemasan", "Dompet Pengemasan" -> lunasOrders.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp }
-                    "Waste", "Dompet Waste / Rusak" -> lunasOrders.sumOf { wastePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Tenaga Kerja", "Dompet Tenaga Kerja" -> lunasOrders.sumOf { tenagaKerjaPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Listrik", "Dompet Listrik" -> lunasOrders.sumOf { listrikPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Maintenance Alat", "Dompet Maintenance" -> lunasOrders.sumOf { maintenancePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Sisa Laba", "Dompet Laba Bersih" -> lunasOrders.sumOf { order ->
+                val saldoTerplotting = when {
+                    name.contains("Kertas", ignoreCase = true) -> lunasOrders.sumOf { it.qtyOrder.toDouble() * kertasHpp }
+                    name.contains("Tinta", ignoreCase = true) -> lunasOrders.sumOf { it.qtyOrder.toDouble() * tintaHpp }
+                    name.contains("Pengemasan", ignoreCase = true) -> lunasOrders.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp }
+                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> lunasOrders.sumOf { wastePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> lunasOrders.sumOf { tenagaKerjaPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Listrik", ignoreCase = true) -> lunasOrders.sumOf { listrikPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> lunasOrders.sumOf { maintenancePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Laba", ignoreCase = true) -> lunasOrders.sumOf { order ->
                         val totalPendapatan = order.qtyOrder.toDouble() * order.hargaSatuan
                         val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp
                         val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp
@@ -400,48 +401,54 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     else -> 0.0 // Account like 'Me UP GpS' starts at 0 and is adjusted manually
                 }
 
-                // 2. Calculate Mutasi Penyesuain (Total of manual mutations, where Uang Keluar and source-transfer are negative, and Uang Masuk and target-transfer are positive)
-                val mutasiPenyesuain = mutations
-                    .sumOf { mutation ->
-                        when (mutation.jenisMutasi) {
-                            "Uang Keluar" -> {
-                                if (mutation.idAkun == account.idAkun) -mutation.nominal else 0.0
-                            }
-                            "Uang Masuk" -> {
-                                if (mutation.idAkun == account.idAkun) mutation.nominal else 0.0
-                            }
-                            "Pindah Saldo" -> {
-                                when {
-                                    mutation.idAkun == account.idAkun -> -mutation.nominal
-                                    mutation.idAkunTujuan == account.idAkun -> mutation.nominal
-                                    else -> 0.0
-                                }
-                            }
-                            else -> 0.0
-                        }
-                    }
+                // 2. Calculate Mutasi Masuk and Mutasi Keluar
+                val mutasiMasuk = mutations.filter {
+                    (it.jenisMutasi == "Uang Masuk" && it.idAkun == account.idAkun) ||
+                    (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
+                }.sumOf { it.nominal }
 
-                // 3. Sisa Saldo Riil = Saldo Terplotting + Mutasi Penyesuain
-                val sisaSaldoRiil = saldoTerplotting + mutasiPenyesuain
+                val mutasiKeluar = mutations.filter {
+                    (it.jenisMutasi == "Uang Keluar" && it.idAkun == account.idAkun) ||
+                    (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
+                }.sumOf { it.nominal }
+
+                val mutasiPenyesuain = mutasiMasuk - mutasiKeluar
+
+                // 3. Saldo Awal + Saldo Terplotting + Mutasi Masuk - Mutasi Keluar
+                val saldoAwal = account.saldoAwal
+                val totalAlokasiMasuk = saldoAwal + saldoTerplotting + mutasiMasuk
+                val sisaSaldoRiil = totalAlokasiMasuk - mutasiKeluar
 
                 AccountDashboardRow(
                     idAkun = account.idAkun,
                     namaAkun = account.namaAkun,
                     saldoTerplotting = saldoTerplotting,
                     mutasiPenyesuain = mutasiPenyesuain,
-                    sisaSaldoRiil = sisaSaldoRiil
+                    sisaSaldoRiil = sisaSaldoRiil,
+                    mutasiMasuk = mutasiMasuk,
+                    mutasiKeluar = mutasiKeluar,
+                    totalAlokasiMasuk = totalAlokasiMasuk,
+                    saldoAwal = saldoAwal
                 )
             }
 
             val grandTotalPlotting = rows.sumOf { it.saldoTerplotting }
-            val grandTotalMutasi = rows.sumOf { it.mutasiPenyesuain }
-            val grandTotalSisaRiil = rows.sumOf { it.sisaSaldoRiil }
+            val grandTotalSaldoAwal = rows.sumOf { it.saldoAwal }
+            val grandTotalMutasiMasuk = rows.sumOf { it.mutasiMasuk }
+            val grandTotalMutasiKeluar = rows.sumOf { it.mutasiKeluar }
+            val grandTotalMutasi = grandTotalMutasiMasuk - grandTotalMutasiKeluar
+            val grandTotalAlokasiDanMasuk = grandTotalSaldoAwal + grandTotalPlotting + grandTotalMutasiMasuk
+            val grandTotalSisaRiil = grandTotalAlokasiDanMasuk - grandTotalMutasiKeluar
 
             DashboardSummary(
                 rows = rows,
                 grandTotalPlotting = grandTotalPlotting,
                 grandTotalMutasi = grandTotalMutasi,
-                grandTotalSisaRiil = grandTotalSisaRiil
+                grandTotalSisaRiil = grandTotalSisaRiil,
+                grandTotalMutasiMasuk = grandTotalMutasiMasuk,
+                grandTotalMutasiKeluar = grandTotalMutasiKeluar,
+                grandTotalAlokasiDanMasuk = grandTotalAlokasiDanMasuk,
+                grandTotalSaldoAwal = grandTotalSaldoAwal
             )
         }.stateIn(
             viewModelScope,
@@ -473,27 +480,33 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 return true
             }
 
-            val filteredLunasOrders = orders.filter { it.status == "Lunas" && inRange(it.tanggalOrder) }
+            val filteredLunasOrders = orders.filter { it.status.equals("Lunas", ignoreCase = true) && inRange(it.tanggalOrder) }
             val filteredMuts = mutations.filter { inRange(it.tanggalMutasi) }
 
-            val kertasHpp = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
-            val tintaHpp = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
-            val pengemasanHpp = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
-            val wastePct = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
-            val tenagaKerjaPct = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
-            val listrikPct = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
-            val maintenancePct = accounts.find { it.namaAkun == "Maintenance Alat" || it.namaAkun == "Dompet Maintenance" }?.persentaseOperasional?.toDouble() ?: 0.05
+            val kertasHpp = accounts.find { it.namaAkun.contains("Kertas", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 106.0
+            val tintaHpp = accounts.find { it.namaAkun.contains("Tinta", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 25.0
+            val pengemasanHpp = accounts.find { it.namaAkun.contains("Pengemasan", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 300.0
+            val wastePct = accounts.find { it.namaAkun.contains("Waste", ignoreCase = true) || it.namaAkun.contains("Rusak", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+            val tenagaKerjaPct = accounts.find { it.namaAkun.contains("Tenaga", ignoreCase = true) || it.namaAkun.contains("Gaji", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.07
+            val listrikPct = accounts.find { it.namaAkun.contains("Listrik", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.02
+            val maintenancePct = accounts.find { it.namaAkun.contains("Maintenance", ignoreCase = true) || it.namaAkun.contains("Alat", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+
+            // Calculate all-time live balances for total synchronization with wallet management
+            val allLunasOrders = orders.filter { it.status.equals("Lunas", ignoreCase = true) }
 
             val items = accounts.map { account ->
-                val masukPlotting = when (account.namaAkun) {
-                    "Kertas", "Dompet Kertas" -> filteredLunasOrders.sumOf { it.qtyOrder.toDouble() * kertasHpp }
-                    "Tinta", "Dompet Tinta" -> filteredLunasOrders.sumOf { it.qtyOrder.toDouble() * tintaHpp }
-                    "Pengemasan", "Dompet Pengemasan" -> filteredLunasOrders.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp }
-                    "Waste", "Dompet Waste / Rusak" -> filteredLunasOrders.sumOf { wastePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Tenaga Kerja", "Dompet Tenaga Kerja" -> filteredLunasOrders.sumOf { tenagaKerjaPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Listrik", "Dompet Listrik" -> filteredLunasOrders.sumOf { listrikPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Maintenance Alat", "Dompet Maintenance" -> filteredLunasOrders.sumOf { maintenancePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    "Sisa Laba", "Dompet Laba Bersih" -> filteredLunasOrders.sumOf { order ->
+                val name = account.namaAkun
+
+                // Plotting within period (or all time if "Semua Waktu")
+                val masukPlotting = when {
+                    name.contains("Kertas", ignoreCase = true) -> filteredLunasOrders.sumOf { it.qtyOrder.toDouble() * kertasHpp }
+                    name.contains("Tinta", ignoreCase = true) -> filteredLunasOrders.sumOf { it.qtyOrder.toDouble() * tintaHpp }
+                    name.contains("Pengemasan", ignoreCase = true) -> filteredLunasOrders.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp }
+                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> filteredLunasOrders.sumOf { wastePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> filteredLunasOrders.sumOf { tenagaKerjaPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Listrik", ignoreCase = true) -> filteredLunasOrders.sumOf { listrikPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> filteredLunasOrders.sumOf { maintenancePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
+                    name.contains("Laba", ignoreCase = true) -> filteredLunasOrders.sumOf { order ->
                         val totalPendapatan = order.qtyOrder.toDouble() * order.hargaSatuan
                         val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp
                         val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp
@@ -508,19 +521,35 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     else -> 0.0
                 }
 
-                val keluarRiil = filteredMuts.filter { it.jenisMutasi == "Uang Keluar" && it.idAkun == account.idAkun }
-                    .sumOf { it.nominal } + filteredMuts.filter { it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun }.sumOf { it.nominal }
+                // Mutasi Masuk: Uang Masuk ke akun ini + Pindah Saldo yang masuk ke akun ini (idAkunTujuan)
+                val mutasiMasuk = filteredMuts.filter {
+                    (it.jenisMutasi == "Uang Masuk" && it.idAkun == account.idAkun) ||
+                    (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
+                }.sumOf { it.nominal }
 
-                val sisa = masukPlotting - keluarRiil
-                val serapanPct = if (masukPlotting > 0.0) (keluarRiil / masukPlotting) * 100.0 else if (keluarRiil > 0.0) 100.0 else 0.0
+                // Total Pemasukan / Alokasi = Saldo Awal + Alokasi Plotting Nota + Mutasi Masuk Manual
+                val saldoAwal = account.saldoAwal
+                val totalMasuk = saldoAwal + masukPlotting + mutasiMasuk
+
+                // Mutasi Keluar: Uang Keluar dari akun ini + Pindah Saldo keluar dari akun ini (idAkun)
+                val keluarRiil = filteredMuts.filter {
+                    (it.jenisMutasi == "Uang Keluar" && it.idAkun == account.idAkun) ||
+                    (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
+                }.sumOf { it.nominal }
+
+                // Sisa Saldo Riil = Total Masuk (Saldo Awal + Alokasi + Mutasi Masuk) - Mutasi Keluar
+                val sisa = totalMasuk - keluarRiil
+                val serapanPct = if (totalMasuk > 0.0) (keluarRiil / totalMasuk) * 100.0 else if (keluarRiil > 0.0) 100.0 else 0.0
 
                 AllocationComparisonItem(
                     idAkun = account.idAkun,
                     namaAkun = account.namaAkun,
-                    totalMasukPlotting = masukPlotting,
+                    totalMasukPlotting = totalMasuk,
                     totalKeluarRiil = keluarRiil,
                     sisaSaldo = sisa,
-                    persentaseSerapan = serapanPct
+                    persentaseSerapan = serapanPct,
+                    saldoAwal = saldoAwal,
+                    mutasiMasuk = mutasiMasuk
                 )
             }
 
@@ -662,6 +691,23 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun deleteAllPelanggan() {
+        viewModelScope.launch {
+            repository.deleteAllPelanggan()
+        }
+    }
+
+    fun resetAndSeedCustomers(forceOverwrite: Boolean = true, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.seedDefaultCustomers(forceOverwrite = forceOverwrite)
+            } catch (e: Exception) {
+                Log.e("FinanceViewModel", "Error resetting & seeding customers: ${e.message}")
+            }
+            onComplete?.invoke()
+        }
+    }
+
     // CRUD for MasterSatuanHarga
     fun insertSatuanHarga(nama: String, harga: Double) {
         viewModelScope.launch {
@@ -682,6 +728,32 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Update all global financial settings in MasterAkunSaldo table
+    // Set Saldo Awal for specific cash pos with real-time Firestore persistence
+    fun setSaldoAwalAkun(
+        idAkun: Int,
+        saldoAwal: Double,
+        catatMutasi: Boolean = true,
+        keterangan: String = "Saldo Awal Modal",
+        tanggal: String = getTodayString()
+    ) {
+        viewModelScope.launch {
+            repository.setSaldoAwal(idAkun, saldoAwal)
+            if (catatMutasi && saldoAwal > 0.0) {
+                val now = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                val mutation = MutasiManualKeluarMasuk(
+                    tanggalMutasi = tanggal,
+                    idAkun = idAkun,
+                    jenisMutasi = "Uang Masuk",
+                    nominal = saldoAwal,
+                    keterangan = keterangan,
+                    waktuMutasi = now
+                )
+                repository.insertMutation(mutation)
+            }
+        }
+    }
+
+    // Update all global financial settings in MasterAkunSaldo table with preserved saldoAwal
     fun updateFinancialSettings(
         kertasHpp: Double,
         tintaHpp: Double,
@@ -692,13 +764,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         maintenancePct: Double
     ) {
         viewModelScope.launch {
-            repository.insertAccount(MasterAkunSaldo(idAkun = 1, namaAkun = "Dompet Kertas", persentaseOperasional = 0.0f, konstanHppUnit = kertasHpp.toFloat()))
-            repository.insertAccount(MasterAkunSaldo(idAkun = 2, namaAkun = "Dompet Tinta", persentaseOperasional = 0.0f, konstanHppUnit = tintaHpp.toFloat()))
-            repository.insertAccount(MasterAkunSaldo(idAkun = 3, namaAkun = "Dompet Pengemasan", persentaseOperasional = 0.0f, konstanHppUnit = pengemasanHpp.toFloat()))
-            repository.insertAccount(MasterAkunSaldo(idAkun = 4, namaAkun = "Dompet Waste / Rusak", persentaseOperasional = wastePct.toFloat(), konstanHppUnit = 0.0f))
-            repository.insertAccount(MasterAkunSaldo(idAkun = 5, namaAkun = "Dompet Tenaga Kerja", persentaseOperasional = tenagaKerjaPct.toFloat(), konstanHppUnit = 0.0f))
-            repository.insertAccount(MasterAkunSaldo(idAkun = 6, namaAkun = "Dompet Listrik", persentaseOperasional = listrikPct.toFloat(), konstanHppUnit = 0.0f))
-            repository.insertAccount(MasterAkunSaldo(idAkun = 7, namaAkun = "Dompet Maintenance", persentaseOperasional = maintenancePct.toFloat(), konstanHppUnit = 0.0f))
+            val existing = repository.getAllAccountsDirect().associateBy { it.idAkun }
+            repository.insertAccount(MasterAkunSaldo(idAkun = 1, namaAkun = "Dompet Kertas", persentaseOperasional = 0.0f, konstanHppUnit = kertasHpp.toFloat(), saldoAwal = existing[1]?.saldoAwal ?: 0.0))
+            repository.insertAccount(MasterAkunSaldo(idAkun = 2, namaAkun = "Dompet Tinta", persentaseOperasional = 0.0f, konstanHppUnit = tintaHpp.toFloat(), saldoAwal = existing[2]?.saldoAwal ?: 0.0))
+            repository.insertAccount(MasterAkunSaldo(idAkun = 3, namaAkun = "Dompet Pengemasan", persentaseOperasional = 0.0f, konstanHppUnit = pengemasanHpp.toFloat(), saldoAwal = existing[3]?.saldoAwal ?: 0.0))
+            repository.insertAccount(MasterAkunSaldo(idAkun = 4, namaAkun = "Dompet Waste / Rusak", persentaseOperasional = wastePct.toFloat(), konstanHppUnit = 0.0f, saldoAwal = existing[4]?.saldoAwal ?: 0.0))
+            repository.insertAccount(MasterAkunSaldo(idAkun = 5, namaAkun = "Dompet Tenaga Kerja", persentaseOperasional = tenagaKerjaPct.toFloat(), konstanHppUnit = 0.0f, saldoAwal = existing[5]?.saldoAwal ?: 0.0))
+            repository.insertAccount(MasterAkunSaldo(idAkun = 6, namaAkun = "Dompet Listrik", persentaseOperasional = listrikPct.toFloat(), konstanHppUnit = 0.0f, saldoAwal = existing[6]?.saldoAwal ?: 0.0))
+            repository.insertAccount(MasterAkunSaldo(idAkun = 7, namaAkun = "Dompet Maintenance", persentaseOperasional = maintenancePct.toFloat(), konstanHppUnit = 0.0f, saldoAwal = existing[7]?.saldoAwal ?: 0.0))
         }
     }
 
