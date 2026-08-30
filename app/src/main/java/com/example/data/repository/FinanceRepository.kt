@@ -172,10 +172,18 @@ class FinanceRepository(
             ),
             MasterPelanggan(
                 idPelanggan = 5,
-                namaPelanggan = "Akuntansii",
+                namaPelanggan = "AKUNTANSI",
                 instansi = "SMKN 1 Kaligondang",
                 kontak = "-",
                 alamatInstansi = "SMKN 1 Kaligondang",
+                npwp = "-"
+            ),
+            MasterPelanggan(
+                idPelanggan = 6,
+                namaPelanggan = "Umum",
+                instansi = "-",
+                kontak = "-",
+                alamatInstansi = "-",
                 npwp = "-"
             )
         )
@@ -190,8 +198,8 @@ class FinanceRepository(
         // 2. Local Room DB fallback check & ensure default customers
         try {
             val existing = financeDao.getAllPelangganDirect()
-            val hasLegacyNames = existing.any { it.namaPelanggan in listOf("AkL", "TiTi", "RatRi", "WiDi") || it.namaPelanggan.contains("Budi", ignoreCase = true) || it.namaPelanggan.contains("Grafika", ignoreCase = true) }
-            val hasAllExpected = listOf("Bu Titi", "Bu Anggit", "Bu Ratri", "Bu Widi", "Akuntansii").all { expected ->
+            val hasLegacyNames = existing.any { it.namaPelanggan in listOf("AkL", "TiTi", "RatRi", "WiDi", "Akuntansii") || it.namaPelanggan.contains("Budi", ignoreCase = true) || it.namaPelanggan.contains("Grafika", ignoreCase = true) }
+            val hasAllExpected = listOf("Bu Titi", "Bu Anggit", "Bu Ratri", "Bu Widi", "AKUNTANSI", "Umum").all { expected ->
                 existing.any { it.namaPelanggan.equals(expected, ignoreCase = true) }
             }
 

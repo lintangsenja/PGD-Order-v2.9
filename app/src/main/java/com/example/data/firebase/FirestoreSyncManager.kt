@@ -743,10 +743,18 @@ class FirestoreSyncManager(
                 ),
                 MasterPelanggan(
                     idPelanggan = 5,
-                    namaPelanggan = "Akuntansii",
+                    namaPelanggan = "AKUNTANSI",
                     instansi = "SMKN 1 Kaligondang",
                     kontak = "-",
                     alamatInstansi = "SMKN 1 Kaligondang",
+                    npwp = "-"
+                ),
+                MasterPelanggan(
+                    idPelanggan = 6,
+                    namaPelanggan = "Umum",
+                    instansi = "-",
+                    kontak = "-",
+                    alamatInstansi = "-",
                     npwp = "-"
                 )
             )
@@ -770,8 +778,8 @@ class FirestoreSyncManager(
                 } else {
                     val allNames = (customersSnapshot?.documents?.mapNotNull { it.getString("namaPelanggan") } ?: emptyList()) +
                             (masterPelangganSnapshot?.documents?.mapNotNull { it.getString("namaPelanggan") } ?: emptyList())
-                    val hasLegacyNames = allNames.any { it in listOf("AkL", "TiTi", "RatRi", "WiDi") || it.contains("Budi", ignoreCase = true) || it.contains("Grafika", ignoreCase = true) }
-                    val hasAllDefaults = listOf("Bu Titi", "Bu Anggit", "Bu Ratri", "Bu Widi", "Akuntansii").all { expected ->
+                    val hasLegacyNames = allNames.any { it in listOf("AkL", "TiTi", "RatRi", "WiDi", "Akuntansii") || it.contains("Budi", ignoreCase = true) || it.contains("Grafika", ignoreCase = true) }
+                    val hasAllDefaults = listOf("Bu Titi", "Bu Anggit", "Bu Ratri", "Bu Widi", "AKUNTANSI", "Umum").all { expected ->
                         allNames.any { it.equals(expected, ignoreCase = true) }
                     }
                     if (hasLegacyNames || !hasAllDefaults) {

@@ -60,23 +60,25 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("INSERT INTO master_akun_saldo (id_akun, nama_akun, persentase_operasional, konstan_hpp_unit, saldo_awal) VALUES (8, 'Dompet Laba Bersih', 0.0, 0.0, 0.0);")
                 db.execSQL("INSERT OR IGNORE INTO master_akun_saldo (id_akun, nama_akun, persentase_operasional, konstan_hpp_unit, saldo_awal) VALUES (9, 'Me GpS', 0.0, 0.0, 0.0);")
 
-                // Seed the 5 default customers (SMKN 1 Kaligondang)
+                // Seed the 6 default customers (SMKN 1 Kaligondang & Umum)
                 db.execSQL("INSERT OR REPLACE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (1, 'Bu Titi', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
                 db.execSQL("INSERT OR REPLACE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (2, 'Bu Anggit', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
                 db.execSQL("INSERT OR REPLACE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (3, 'Bu Ratri', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
                 db.execSQL("INSERT OR REPLACE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (4, 'Bu Widi', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
-                db.execSQL("INSERT OR REPLACE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (5, 'Akuntansii', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
+                db.execSQL("INSERT OR REPLACE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (5, 'AKUNTANSI', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
+                db.execSQL("INSERT OR REPLACE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (6, 'Umum', '-', '-', '-', '-');")
             }
 
             override fun onOpen(db: SupportSQLiteDatabase) {
                 super.onOpen(db)
                 // Clean up any remaining dummy/mock data or legacy names from previous test runs
-                db.execSQL("DELETE FROM master_pelanggan WHERE nama_pelanggan IN ('AkL', 'TiTi', 'RatRi', 'WiDi') OR nama_pelanggan LIKE '%Budi%' OR nama_pelanggan LIKE '%CV Grafika%';")
+                db.execSQL("DELETE FROM master_pelanggan WHERE nama_pelanggan IN ('AkL', 'TiTi', 'RatRi', 'WiDi', 'Akuntansii') OR nama_pelanggan LIKE '%Budi%' OR nama_pelanggan LIKE '%CV Grafika%';")
                 db.execSQL("INSERT OR IGNORE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (1, 'Bu Titi', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
                 db.execSQL("INSERT OR IGNORE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (2, 'Bu Anggit', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
                 db.execSQL("INSERT OR IGNORE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (3, 'Bu Ratri', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
                 db.execSQL("INSERT OR IGNORE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (4, 'Bu Widi', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
-                db.execSQL("INSERT OR IGNORE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (5, 'Akuntansii', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
+                db.execSQL("INSERT OR IGNORE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (5, 'AKUNTANSI', 'SMKN 1 Kaligondang', '-', 'SMKN 1 Kaligondang', '-');")
+                db.execSQL("INSERT OR IGNORE INTO master_pelanggan (id_pelanggan, nama_pelanggan, instansi, kontak, alamat_instansi, npwp) VALUES (6, 'Umum', '-', '-', '-', '-');")
                 db.execSQL("INSERT OR IGNORE INTO master_akun_saldo (id_akun, nama_akun, persentase_operasional, konstan_hpp_unit, saldo_awal) VALUES (9, 'Me GpS', 0.0, 0.0, 0.0);")
             }
         }
