@@ -110,4 +110,49 @@ interface FinanceDao {
 
     @Delete
     suspend fun deleteSatuanHarga(satuanHarga: MasterSatuanHarga)
+
+    // Inventaris & Aset Bahan Baku Queries
+    @Query("SELECT * FROM inventaris_bahan_baku ORDER BY kategori ASC, nama_barang ASC")
+    fun getAllInventarisFlow(): Flow<List<com.example.data.model.InventarisBahanBaku>>
+
+    @Query("SELECT * FROM inventaris_bahan_baku ORDER BY kategori ASC, nama_barang ASC")
+    suspend fun getAllInventarisDirect(): List<com.example.data.model.InventarisBahanBaku>
+
+    @Query("SELECT * FROM inventaris_bahan_baku WHERE id_barang = :id LIMIT 1")
+    suspend fun getInventarisById(id: Int): com.example.data.model.InventarisBahanBaku?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertInventaris(item: com.example.data.model.InventarisBahanBaku): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllInventaris(items: List<com.example.data.model.InventarisBahanBaku>)
+
+    @Update
+    suspend fun updateInventaris(item: com.example.data.model.InventarisBahanBaku)
+
+    @Delete
+    suspend fun deleteInventaris(item: com.example.data.model.InventarisBahanBaku)
+
+    @Query("DELETE FROM inventaris_bahan_baku WHERE nama_barang IN ('Kertas HVS A4 70gr SiDU', 'Kertas HVS F4 70gr SiDU', 'Kertas Art Paper 260gr A3+', 'Tinta Epson 003 Black', 'Tinta Epson 003 CMY (1 Set)', 'Plastik OPP Bening 25x35', 'Kardus Packing Sedang') OR nama_barang LIKE '%HVS%' OR nama_barang LIKE '%Art Paper%'")
+    suspend fun cleanSampleInventaris()
+
+    // Transaksi Belanja Inventaris Queries
+    @Query("SELECT * FROM transaksi_belanja_inventaris ORDER BY tanggal DESC, id_belanja DESC")
+    fun getAllBelanjaInventarisFlow(): Flow<List<com.example.data.model.TransaksiBelanjaInventaris>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBelanjaInventaris(item: com.example.data.model.TransaksiBelanjaInventaris): Long
+
+    @Delete
+    suspend fun deleteBelanjaInventaris(item: com.example.data.model.TransaksiBelanjaInventaris)
+
+    // Riwayat Pemakaian Bahan & Koreksi Stok Queries
+    @Query("SELECT * FROM riwayat_pemakaian_bahan ORDER BY tanggal DESC, id_pemakaian DESC")
+    fun getAllPemakaianBahanFlow(): Flow<List<com.example.data.model.RiwayatPemakaianBahan>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPemakaianBahan(item: com.example.data.model.RiwayatPemakaianBahan): Long
+
+    @Delete
+    suspend fun deletePemakaianBahan(item: com.example.data.model.RiwayatPemakaianBahan)
 }

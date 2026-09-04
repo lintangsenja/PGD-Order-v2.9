@@ -32,7 +32,13 @@ data class TransaksiOrderMasuk(
     val status: String, // "Lunas" or "Belum Lunas"
     
     @ColumnInfo(name = "kategori", defaultValue = "Umum")
-    val kategori: String = "Umum" // "Nota", "Umum", etc.
+    val kategori: String = "Umum", // "Nota", "Umum", etc.
+
+    @ColumnInfo(name = "jumlah_dibayar", defaultValue = "0.0")
+    val jumlahDibayar: Double = 0.0,
+
+    @ColumnInfo(name = "metode_pembayaran", defaultValue = "Bayar Penuh")
+    val metodePembayaran: String = "Bayar Penuh" // "DP", "Bayar Sebagian", "Bayar Penuh"
 ) {
     // Helper to identify if an order is specific to Nota
     val isNota: Boolean
@@ -40,34 +46,83 @@ data class TransaksiOrderMasuk(
                 (kategori.isBlank() || kategori.equals("umum", ignoreCase = true)) &&
                 namaPesanan.contains("nota", ignoreCase = true)
 
-    // Helper calculations inside the model to keep code clean and modular
+    // Total Tagihan Keseluruhan
     val totalPendapatan: Double
         get() = qtyOrder.toDouble() * hargaSatuan
 
-    val alokasiKertas: Double
+    // Uang riil yang sudah dibayarkan ke kas
+    val effectiveJumlahDibayar: Double
+        get() = if (status.equals("Lunas", ignoreCase = true) && jumlahDibayar <= 0.0) {
+            totalPendapatan
+        } else {
+            jumlahDibayar.coerceIn(0.0, totalPendapatan)
+        }
+
+    // Sisa kekurangan tagihan
+    val sisaKekurangan: Double
+        get() = (totalPendapatan - effectiveJumlahDibayar).coerceAtLeast(0.0)
+
+    // Rasio pembayaran aktual (0.0 .. 1.0) untuk autoplotting proporsional
+    val paymentRatio: Double
+        get() = if (totalPendapatan > 0.0) {
+            (effectiveJumlahDibayar / totalPendapatan).coerceIn(0.0, 1.0)
+        } else {
+            1.0
+        }
+
+    // Alokasi teoritis penuh (100%)
+    val fullAlokasiKertas: Double
         get() = qtyOrder.toDouble() * 106.0
 
-    val alokasiTinta: Double
+    val fullAlokasiTinta: Double
         get() = qtyOrder.toDouble() * 25.0
 
-    val alokasiPengemasan: Double
+    val fullAlokasiPengemasan: Double
         get() = jumlahPlastikPengemasan.toDouble() * 300.0
 
-    val alokasiWaste: Double
+    val fullAlokasiWaste: Double
         get() = 0.05 * totalPendapatan
 
-    val alokasiTenagaKerja: Double
+    val fullAlokasiTenagaKerja: Double
         get() = 0.07 * totalPendapatan
 
-    val alokasiListrik: Double
+    val fullAlokasiListrik: Double
         get() = 0.02 * totalPendapatan
 
-    val alokasiMaintenance: Double
+    val fullAlokasiMaintenance: Double
         get() = 0.05 * totalPendapatan
+
+    val fullTotalModalDasar: Double
+        get() = fullAlokasiKertas + fullAlokasiTinta + fullAlokasiPengemasan + fullAlokasiWaste + fullAlokasiTenagaKerja + fullAlokasiListrik + fullAlokasiMaintenance
+
+    val fullAlokasiSisaLaba: Double
+        get() = totalPendapatan - fullTotalModalDasar
+
+    // Alokasi proporsional yang riil terplotting ke dompet berdasarkan uang riil yang sudah dibayarkan saat ini:
+    val alokasiKertas: Double
+        get() = fullAlokasiKertas * paymentRatio
+
+    val alokasiTinta: Double
+        get() = fullAlokasiTinta * paymentRatio
+
+    val alokasiPengemasan: Double
+        get() = fullAlokasiPengemasan * paymentRatio
+
+    val alokasiWaste: Double
+        get() = 0.05 * effectiveJumlahDibayar
+
+    val alokasiTenagaKerja: Double
+        get() = 0.07 * effectiveJumlahDibayar
+
+    val alokasiListrik: Double
+        get() = 0.02 * effectiveJumlahDibayar
+
+    val alokasiMaintenance: Double
+        get() = 0.05 * effectiveJumlahDibayar
 
     val totalModalDasar: Double
         get() = alokasiKertas + alokasiTinta + alokasiPengemasan + alokasiWaste + alokasiTenagaKerja + alokasiListrik + alokasiMaintenance
 
     val alokasiSisaLaba: Double
-        get() = totalPendapatan - totalModalDasar
+        get() = effectiveJumlahDibayar - totalModalDasar
 }

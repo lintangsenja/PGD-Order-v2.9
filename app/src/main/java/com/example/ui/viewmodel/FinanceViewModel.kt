@@ -14,6 +14,9 @@ import com.example.data.model.TransaksiOrderMasuk
 import com.example.data.model.MasterPelanggan
 import com.example.data.model.MasterSatuanHarga
 import com.example.data.model.CustomerFrequency
+import com.example.data.model.InventarisBahanBaku
+import com.example.data.model.TransaksiBelanjaInventaris
+import com.example.data.model.RiwayatPemakaianBahan
 import com.example.data.repository.FinanceRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +95,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     val allMutations: StateFlow<List<MutasiManualKeluarMasuk>>
     val allPelanggan: StateFlow<List<MasterPelanggan>>
     val allSatuanHarga: StateFlow<List<MasterSatuanHarga>>
+    val allInventaris: StateFlow<List<InventarisBahanBaku>>
+    val allBelanjaInventaris: StateFlow<List<TransaksiBelanjaInventaris>>
+    val allPemakaianBahan: StateFlow<List<RiwayatPemakaianBahan>>
 
     // Date range for reports
     val reportStartDate = MutableStateFlow(getStartOfMonthString())
@@ -325,6 +331,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
                 // Inisialisasi seed data default untuk Master Pelanggan
                 repository.seedDefaultCustomers(forceOverwrite = false)
+
+                // Bersihkan total seluruh data sampel inventaris agar modul inventaris bersih tanpa dummy
+                repository.cleanSampleInventaris()
+                syncManager.cleanSampleInventarisFromCloud()
             } catch (e: Exception) {
                 Log.e("FinanceViewModel", "Error initializing master data: ${e.message}")
             }
@@ -354,6 +364,15 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         allSatuanHarga = repository.allSatuanHarga
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+        allInventaris = repository.allInventaris
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        allBelanjaInventaris = repository.allBelanjaInventaris
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        allPemakaianBahan = repository.allPemakaianBahan
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
         filteredOrders = combine(reportStartDate, reportEndDate) { start, end ->
             repository.getOrdersByDateRangeDirect(start, end)
         }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -373,30 +392,31 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             val maintenancePct = accounts.find { it.namaAkun.contains("Maintenance", ignoreCase = true) || it.namaAkun.contains("Alat", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
 
             val rows = accounts.map { account ->
-                // Filter only Lunas orders for Saldo Terplotting calculation to support status-based calculations and rollbacks
-                val lunasOrders = orders.filter { it.status.equals("Lunas", ignoreCase = true) }
+                // Uang riil yang dibayarkan ke kas menjadi acuan utama autoplotting ke pos dompet secara proporsional
+                val ordersWithPayment = orders.filter { it.effectiveJumlahDibayar > 0.0 }
                 val name = account.namaAkun
 
                 // 1. Calculate Saldo Terplotting based on autoplotting triggers with dynamic configuration
                 val saldoTerplotting = when {
-                    name.contains("Kertas", ignoreCase = true) -> lunasOrders.sumOf { it.qtyOrder.toDouble() * kertasHpp }
-                    name.contains("Tinta", ignoreCase = true) -> lunasOrders.sumOf { it.qtyOrder.toDouble() * tintaHpp }
-                    name.contains("Pengemasan", ignoreCase = true) -> lunasOrders.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp }
-                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> lunasOrders.sumOf { wastePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> lunasOrders.sumOf { tenagaKerjaPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Listrik", ignoreCase = true) -> lunasOrders.sumOf { listrikPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> lunasOrders.sumOf { maintenancePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Laba", ignoreCase = true) -> lunasOrders.sumOf { order ->
-                        val totalPendapatan = order.qtyOrder.toDouble() * order.hargaSatuan
-                        val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp
-                        val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp
-                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
-                        val alokasiWasteVal = wastePct * totalPendapatan
-                        val alokasiTenagaKerjaVal = tenagaKerjaPct * totalPendapatan
-                        val alokasiListrikVal = listrikPct * totalPendapatan
-                        val alokasiMaintenanceVal = maintenancePct * totalPendapatan
+                    name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
+                    name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
+                    name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
+                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> ordersWithPayment.sumOf { wastePct * it.effectiveJumlahDibayar }
+                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> ordersWithPayment.sumOf { tenagaKerjaPct * it.effectiveJumlahDibayar }
+                    name.contains("Listrik", ignoreCase = true) -> ordersWithPayment.sumOf { listrikPct * it.effectiveJumlahDibayar }
+                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> ordersWithPayment.sumOf { maintenancePct * it.effectiveJumlahDibayar }
+                    name.contains("Laba", ignoreCase = true) -> ordersWithPayment.sumOf { order ->
+                        val paid = order.effectiveJumlahDibayar
+                        val ratio = order.paymentRatio
+                        val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp * ratio
+                        val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp * ratio
+                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * ratio
+                        val alokasiWasteVal = wastePct * paid
+                        val alokasiTenagaKerjaVal = tenagaKerjaPct * paid
+                        val alokasiListrikVal = listrikPct * paid
+                        val alokasiMaintenanceVal = maintenancePct * paid
                         val totalModalDasar = alokasiKertasVal + alokasiTintaVal + alokasiPengemasanVal + alokasiWasteVal + alokasiTenagaKerjaVal + alokasiListrikVal + alokasiMaintenanceVal
-                        totalPendapatan - totalModalDasar
+                        paid - totalModalDasar
                     }
                     else -> 0.0 // Account like 'Me UP GpS' starts at 0 and is adjusted manually
                 }
@@ -480,7 +500,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 return true
             }
 
-            val filteredLunasOrders = orders.filter { it.status.equals("Lunas", ignoreCase = true) && inRange(it.tanggalOrder) }
+            val filteredOrdersWithPayment = orders.filter { inRange(it.tanggalOrder) && it.effectiveJumlahDibayar > 0.0 }
             val filteredMuts = mutations.filter { inRange(it.tanggalMutasi) }
 
             val kertasHpp = accounts.find { it.namaAkun.contains("Kertas", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 106.0
@@ -491,32 +511,30 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             val listrikPct = accounts.find { it.namaAkun.contains("Listrik", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.02
             val maintenancePct = accounts.find { it.namaAkun.contains("Maintenance", ignoreCase = true) || it.namaAkun.contains("Alat", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
 
-            // Calculate all-time live balances for total synchronization with wallet management
-            val allLunasOrders = orders.filter { it.status.equals("Lunas", ignoreCase = true) }
-
             val items = accounts.map { account ->
                 val name = account.namaAkun
 
-                // Plotting within period (or all time if "Semua Waktu")
+                // Plotting within period (or all time if "Semua Waktu") proporsional berdasarkan uang riil yang dibayarkan
                 val masukPlotting = when {
-                    name.contains("Kertas", ignoreCase = true) -> filteredLunasOrders.sumOf { it.qtyOrder.toDouble() * kertasHpp }
-                    name.contains("Tinta", ignoreCase = true) -> filteredLunasOrders.sumOf { it.qtyOrder.toDouble() * tintaHpp }
-                    name.contains("Pengemasan", ignoreCase = true) -> filteredLunasOrders.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp }
-                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> filteredLunasOrders.sumOf { wastePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> filteredLunasOrders.sumOf { tenagaKerjaPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Listrik", ignoreCase = true) -> filteredLunasOrders.sumOf { listrikPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> filteredLunasOrders.sumOf { maintenancePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                    name.contains("Laba", ignoreCase = true) -> filteredLunasOrders.sumOf { order ->
-                        val totalPendapatan = order.qtyOrder.toDouble() * order.hargaSatuan
-                        val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp
-                        val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp
-                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
-                        val alokasiWasteVal = wastePct * totalPendapatan
-                        val alokasiTenagaKerjaVal = tenagaKerjaPct * totalPendapatan
-                        val alokasiListrikVal = listrikPct * totalPendapatan
-                        val alokasiMaintenanceVal = maintenancePct * totalPendapatan
+                    name.contains("Kertas", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
+                    name.contains("Tinta", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
+                    name.contains("Pengemasan", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
+                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { wastePct * it.effectiveJumlahDibayar }
+                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { tenagaKerjaPct * it.effectiveJumlahDibayar }
+                    name.contains("Listrik", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { listrikPct * it.effectiveJumlahDibayar }
+                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { maintenancePct * it.effectiveJumlahDibayar }
+                    name.contains("Laba", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { order ->
+                        val paid = order.effectiveJumlahDibayar
+                        val ratio = order.paymentRatio
+                        val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp * ratio
+                        val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp * ratio
+                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * ratio
+                        val alokasiWasteVal = wastePct * paid
+                        val alokasiTenagaKerjaVal = tenagaKerjaPct * paid
+                        val alokasiListrikVal = listrikPct * paid
+                        val alokasiMaintenanceVal = maintenancePct * paid
                         val totalModalDasar = alokasiKertasVal + alokasiTintaVal + alokasiPengemasanVal + alokasiWasteVal + alokasiTenagaKerjaVal + alokasiListrikVal + alokasiMaintenanceVal
-                        totalPendapatan - totalModalDasar
+                        paid - totalModalDasar
                     }
                     else -> 0.0
                 }
@@ -592,7 +610,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             )
     }
 
-    // Insert order in database
+    // Insert order in database with flexible payment (DP, Bayar Sebagian, Bayar Penuh)
     fun insertOrder(
         tanggal: String,
         nama: String,
@@ -601,9 +619,17 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         harga: Double,
         plastik: Int,
         status: String,
-        kategori: String = "Umum"
+        kategori: String = "Umum",
+        jumlahDibayar: Double = 0.0,
+        metodePembayaran: String = "Bayar Penuh"
     ) {
         viewModelScope.launch {
+            val total = qty.toDouble() * harga
+            val actualPaid = when (metodePembayaran) {
+                "Bayar Penuh" -> total
+                else -> jumlahDibayar.coerceIn(0.0, total)
+            }
+            val finalStatus = if (actualPaid >= total && total > 0.0) "Lunas" else if (status.equals("Lunas", ignoreCase = true) && actualPaid >= total) "Lunas" else "Belum Lunas"
             val order = TransaksiOrderMasuk(
                 tanggalOrder = tanggal,
                 namaPesanan = nama,
@@ -611,10 +637,28 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 satuan = satuan,
                 hargaSatuan = harga,
                 jumlahPlastikPengemasan = plastik,
-                status = status,
-                kategori = kategori
+                status = finalStatus,
+                kategori = kategori,
+                jumlahDibayar = actualPaid,
+                metodePembayaran = metodePembayaran
             )
             repository.insertOrder(order)
+        }
+    }
+
+    // Process follow-up payment (pembayaran susulan / cicilan berikutnya)
+    fun addOrderPayment(order: TransaksiOrderMasuk, additionalPayment: Double) {
+        viewModelScope.launch {
+            val total = order.totalPendapatan
+            val currentPaid = order.effectiveJumlahDibayar
+            val newPaid = (currentPaid + additionalPayment).coerceIn(0.0, total)
+            val finalStatus = if (newPaid >= total) "Lunas" else "Belum Lunas"
+            val updatedOrder = order.copy(
+                jumlahDibayar = newPaid,
+                status = finalStatus,
+                metodePembayaran = if (finalStatus == "Lunas") "Bayar Penuh" else "Bayar Sebagian"
+            )
+            repository.updateOrder(updatedOrder)
         }
     }
 
@@ -727,6 +771,186 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // Inventaris & Aset Bahan Baku Methods
+    fun insertInventaris(
+        nama: String,
+        kategori: String,
+        stok: Double,
+        satuan: String,
+        harga: Double,
+        kondisi: Int = 100,
+        catatan: String = ""
+    ) {
+        viewModelScope.launch {
+            val today = getTodayString()
+            val item = InventarisBahanBaku(
+                namaBarang = nama,
+                kategori = kategori,
+                stokUtuh = stok,
+                satuanUtuh = satuan,
+                hargaSatuanUtuh = harga,
+                persentaseKondisi = kondisi,
+                catatan = catatan,
+                updatedAt = today
+            )
+            repository.insertInventaris(item)
+        }
+    }
+
+    fun updateInventaris(item: InventarisBahanBaku) {
+        viewModelScope.launch {
+            repository.updateInventaris(item.copy(updatedAt = getTodayString()))
+        }
+    }
+
+    fun deleteInventaris(item: InventarisBahanBaku) {
+        viewModelScope.launch {
+            repository.deleteInventaris(item)
+        }
+    }
+
+    fun recordBelanjaInventaris(
+        tanggal: String,
+        idAkunKas: Int,
+        namaAkunKas: String,
+        uangKeluarDompet: Double,
+        realisasiNotaToko: Double,
+        catatanSelisih: String,
+        idBarangTerkait: Int?,
+        namaBarang: String,
+        jumlahTambahStok: Double,
+        satuan: String,
+        potongKasOtomatis: Boolean
+    ) {
+        viewModelScope.launch {
+            val selisih = uangKeluarDompet - realisasiNotaToko
+            val record = TransaksiBelanjaInventaris(
+                tanggal = tanggal,
+                idAkunKas = idAkunKas,
+                namaAkunKas = namaAkunKas,
+                uangKeluarDompet = uangKeluarDompet,
+                realisasiNotaToko = realisasiNotaToko,
+                selisihUang = selisih,
+                catatanSelisih = catatanSelisih,
+                idBarangTerkait = idBarangTerkait,
+                namaBarang = namaBarang,
+                jumlahTambahStok = jumlahTambahStok,
+                satuan = satuan,
+                potongKasOtomatis = potongKasOtomatis
+            )
+            repository.insertBelanjaInventaris(record)
+
+            // Catat uang keluar di kas utama jika dicentang
+            if (potongKasOtomatis && uangKeluarDompet > 0.0) {
+                val now = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                val ket = buildString {
+                    append("Belanja Inventaris: $namaBarang (Nota: Rp ${String.format(Locale.GERMANY, "%,.0f", realisasiNotaToko)})")
+                    if (selisih > 0.0 && catatanSelisih.isNotBlank()) {
+                        append(" | Sisa Rp ${String.format(Locale.GERMANY, "%,.0f", selisih)}: $catatanSelisih")
+                    } else if (selisih > 0.0) {
+                        append(" | Sisa Rp ${String.format(Locale.GERMANY, "%,.0f", selisih)}")
+                    }
+                }
+                val mutasi = MutasiManualKeluarMasuk(
+                    tanggalMutasi = tanggal,
+                    idAkun = idAkunKas,
+                    jenisMutasi = "Uang Keluar",
+                    nominal = uangKeluarDompet,
+                    keterangan = ket,
+                    waktuMutasi = now
+                )
+                repository.insertMutation(mutasi)
+            }
+
+            // Tambah stok ke barang inventaris jika dipilih
+            if (idBarangTerkait != null && idBarangTerkait > 0 && jumlahTambahStok > 0.0) {
+                val existing = allInventaris.value.find { it.idBarang == idBarangTerkait }
+                if (existing != null) {
+                    val newStok = existing.stokUtuh + jumlahTambahStok
+                    repository.updateInventaris(existing.copy(stokUtuh = newStok, updatedAt = tanggal))
+                    repository.insertPemakaianBahan(
+                        RiwayatPemakaianBahan(
+                            tanggal = tanggal,
+                            idBarang = existing.idBarang,
+                            namaBarang = existing.namaBarang,
+                            jenisKoreksi = "Tambah Stok Belanja",
+                            nilaiPerubahan = "+$jumlahTambahStok ${existing.satuanUtuh}",
+                            keterangan = "Pembelian dari $namaAkunKas"
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteBelanjaInventaris(item: TransaksiBelanjaInventaris) {
+        viewModelScope.launch {
+            repository.deleteBelanjaInventaris(item)
+        }
+    }
+
+    fun koreksiStokInventaris(
+        item: InventarisBahanBaku,
+        jenisKoreksi: String, // "Kurangi Satuan Utuh", "Ubah Persentase", "Tambah Stok Fisik"
+        jumlahPerubahan: Double,
+        persentaseBaru: Int,
+        keterangan: String,
+        tanggal: String = getTodayString()
+    ) {
+        viewModelScope.launch {
+            when (jenisKoreksi) {
+                "Kurangi Satuan Utuh" -> {
+                    val newStok = maxOf(0.0, item.stokUtuh - jumlahPerubahan)
+                    repository.updateInventaris(item.copy(stokUtuh = newStok, updatedAt = tanggal))
+                    repository.insertPemakaianBahan(
+                        RiwayatPemakaianBahan(
+                            tanggal = tanggal,
+                            idBarang = item.idBarang,
+                            namaBarang = item.namaBarang,
+                            jenisKoreksi = "Kurangi Satuan Utuh",
+                            nilaiPerubahan = "-$jumlahPerubahan ${item.satuanUtuh}",
+                            keterangan = keterangan.ifBlank { "Pemakaian operasional" }
+                        )
+                    )
+                }
+                "Ubah Persentase" -> {
+                    val prev = item.persentaseKondisi
+                    repository.updateInventaris(item.copy(persentaseKondisi = persentaseBaru, updatedAt = tanggal))
+                    repository.insertPemakaianBahan(
+                        RiwayatPemakaianBahan(
+                            tanggal = tanggal,
+                            idBarang = item.idBarang,
+                            namaBarang = item.namaBarang,
+                            jenisKoreksi = "Ubah Persentase",
+                            nilaiPerubahan = "$prev% -> $persentaseBaru%",
+                            keterangan = keterangan.ifBlank { "Koreksi sisa pemakaian" }
+                        )
+                    )
+                }
+                "Tambah Stok Fisik" -> {
+                    val newStok = item.stokUtuh + jumlahPerubahan
+                    repository.updateInventaris(item.copy(stokUtuh = newStok, updatedAt = tanggal))
+                    repository.insertPemakaianBahan(
+                        RiwayatPemakaianBahan(
+                            tanggal = tanggal,
+                            idBarang = item.idBarang,
+                            namaBarang = item.namaBarang,
+                            jenisKoreksi = "Tambah Stok Fisik",
+                            nilaiPerubahan = "+$jumlahPerubahan ${item.satuanUtuh}",
+                            keterangan = keterangan.ifBlank { "Penyesuaian stok gudang" }
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun deletePemakaianBahan(item: RiwayatPemakaianBahan) {
+        viewModelScope.launch {
+            repository.deletePemakaianBahan(item)
+        }
+    }
+
     // Update all global financial settings in MasterAkunSaldo table
     // Set Saldo Awal for specific cash pos with real-time Firestore persistence
     fun setSaldoAwalAkun(
@@ -777,7 +1001,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun quickPayOrder(order: TransaksiOrderMasuk) {
         viewModelScope.launch {
-            repository.updateOrder(order.copy(status = "Lunas"))
+            repository.updateOrder(
+                order.copy(
+                    status = "Lunas",
+                    jumlahDibayar = order.totalPendapatan,
+                    metodePembayaran = "Bayar Penuh"
+                )
+            )
         }
     }
 
@@ -914,6 +1144,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             obj.put("hargaSatuan", o.hargaSatuan)
             obj.put("jumlahPlastikPengemasan", o.jumlahPlastikPengemasan)
             obj.put("status", o.status)
+            obj.put("kategori", o.kategori)
+            obj.put("jumlahDibayar", o.effectiveJumlahDibayar)
+            obj.put("metodePembayaran", o.metodePembayaran)
             ordersArray.put(obj)
         }
         json.put("transaksi", ordersArray)
@@ -1076,7 +1309,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                         satuan = obj.optString("satuan", "Lembar"),
                         hargaSatuan = obj.getDouble("hargaSatuan"),
                         jumlahPlastikPengemasan = obj.optInt("jumlahPlastikPengemasan", 0),
-                        status = obj.getString("status")
+                        status = obj.getString("status"),
+                        kategori = obj.optString("kategori", "Umum"),
+                        jumlahDibayar = obj.optDouble("jumlahDibayar", if (obj.optString("status").equals("Lunas", ignoreCase = true)) obj.getDouble("qtyOrder") * obj.getDouble("hargaSatuan") else 0.0),
+                        metodePembayaran = obj.optString("metodePembayaran", if (obj.optString("status").equals("Lunas", ignoreCase = true)) "Bayar Penuh" else "Bayar Sebagian")
                     )
                     repository.insertOrder(item)
                 }

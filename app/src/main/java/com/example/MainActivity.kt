@@ -3,6 +3,7 @@ package com.example
 import com.example.ui.screens.ProfileAvatar
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.AuditSelisihKasScreen
+import com.example.ui.inventaris.InventarisScreen
 import com.example.util.ImageUtils
 import com.example.util.ReportExportManager
 
@@ -390,6 +391,7 @@ fun MainAppScreen(
                     // Menu items
                     val menuItems = listOf(
                         NavigationDrawerItemData("Order Nota", "order_nota", Icons.Default.ReceiptLong),
+                        NavigationDrawerItemData("Inventaris & Aset", "inventaris", Icons.Default.Inventory2),
                         NavigationDrawerItemData("Audit Selisih Kas", "audit_kas", Icons.Default.FactCheck),
                         NavigationDrawerItemData("Master Data", "master_data", Icons.Default.Storage),
                         NavigationDrawerItemData("Backup Data", "backup", Icons.Default.Backup),
@@ -578,6 +580,7 @@ fun MainAppScreen(
                                 Text(
                                     text = when {
                                         activeDrawerScreen == "order_nota" -> "Order Nota"
+                                        activeDrawerScreen == "inventaris" -> "Inventaris & Aset Bahan Baku"
                                         activeDrawerScreen == "audit_kas" -> "Audit Selisih Kas"
                                         activeDrawerScreen == "master_data" -> "Master Data"
                                         activeDrawerScreen == "backup" -> "Backup Data"
@@ -745,6 +748,7 @@ fun MainAppScreen(
                     if (activeDrawerScreen != null) {
                         when (activeDrawerScreen) {
                             "order_nota" -> OrdersTab(orders = orders, viewModel = viewModel)
+                            "inventaris" -> InventarisScreen(viewModel = viewModel, accounts = accounts)
                             "audit_kas" -> AuditSelisihKasScreen(viewModel = viewModel, summary = summary, accounts = accounts)
                             "master_data" -> MasterDataTab(viewModel)
                             "backup" -> BackupRestoreTab(viewModel)
@@ -753,7 +757,17 @@ fun MainAppScreen(
                         }
                     } else {
                         when (selectedTab) {
-                            0 -> DashboardTab(viewModel, summary, orders, mutations, accounts, userProfile, onNavigateToOrderNota = { activeDrawerScreen = "order_nota" }, onNavigateToAuditKas = { activeDrawerScreen = "audit_kas" })
+                            0 -> DashboardTab(
+                                viewModel,
+                                summary,
+                                orders,
+                                mutations,
+                                accounts,
+                                userProfile,
+                                onNavigateToOrderNota = { activeDrawerScreen = "order_nota" },
+                                onNavigateToAuditKas = { activeDrawerScreen = "audit_kas" },
+                                onNavigateToInventaris = { activeDrawerScreen = "inventaris" }
+                            )
                             1 -> DompetScreen(summary.rows, viewModel, onNavigateToAuditKas = { activeDrawerScreen = "audit_kas" })
                             2 -> TransaksiTab(viewModel, orders, mutations, accounts)
                             3 -> LaporanTab(viewModel)
@@ -901,7 +915,9 @@ fun PendingBayarTab(
     val colorScheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val pendingOrders = remember(orders) { orders.filter { it.status == "Belum Lunas" } }
-    val totalPendingAmount = remember(pendingOrders) { pendingOrders.sumOf { it.qtyOrder.toDouble() * it.hargaSatuan } }
+    val totalPendingKekurangan = remember(pendingOrders) { pendingOrders.sumOf { it.sisaKekurangan } }
+    val totalSudahDibayar = remember(pendingOrders) { pendingOrders.sumOf { it.effectiveJumlahDibayar } }
+    val totalTagihanPending = remember(pendingOrders) { pendingOrders.sumOf { it.totalPendapatan } }
 
     val kertasHpp = remember(accounts) { accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0 }
     val tintaHpp = remember(accounts) { accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0 }
@@ -925,23 +941,281 @@ fun PendingBayarTab(
                 val dynamicListrik = listrikPct * totalPendapatan
                 val dynamicMaintenance = maintenancePct * totalPendapatan
                 val dynamicTotalModal = dynamicKertas + dynamicTinta + dynamicPengemasan + dynamicWaste + dynamicTenagaKerja + dynamicListrik + dynamicMaintenance
-                totalPendapatan - dynamicTotalModal
+                val fullLaba = (totalPendapatan - dynamicTotalModal).coerceAtLeast(0.0)
+                val remainingRatio = (1.0 - order.paymentRatio).coerceIn(0.0, 1.0)
+                fullLaba * remainingRatio
             }
         }
     }
 
     var searchQuery by remember { mutableStateOf("") }
+    var payingOrder by remember { mutableStateOf<TransaksiOrderMasuk?>(null) }
+    var tambahanBayarText by remember { mutableStateOf("") }
+    var showPayConfirmOrder by remember { mutableStateOf<TransaksiOrderMasuk?>(null) }
 
     val filteredList = remember(pendingOrders, searchQuery) {
         if (searchQuery.isBlank()) pendingOrders
         else pendingOrders.filter { it.namaPesanan.contains(searchQuery, ignoreCase = true) || it.tanggalOrder.contains(searchQuery) }
     }
 
+    // Dialog Tambah Pembayaran / Cicilan (Bayar Lagi)
+    if (payingOrder != null) {
+        val targetOrder = payingOrder!!
+        val currentSisa = targetOrder.sisaKekurangan
+        val enteredAdditional = (parseDoubleInput(tambahanBayarText) ?: 0.0).coerceIn(0.0, currentSisa)
+        val sisaSetelahBayar = (currentSisa - enteredAdditional).coerceAtLeast(0.0)
+
+        AlertDialog(
+            onDismissRequest = {
+                payingOrder = null
+                tambahanBayarText = ""
+            },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color(0xFFFEF3C7), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Payments,
+                        contentDescription = null,
+                        tint = Color(0xFFD97706),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    "Terima Pembayaran / Cicilan",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Surface(
+                        color = Color(0xFFF9FAFB),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE5E7EB)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(targetOrder.namaPesanan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Tagihan:", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
+                                Text(formatRupiah(targetOrder.totalPendapatan), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Sudah Dibayar:", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
+                                Text(formatRupiah(targetOrder.effectiveJumlahDibayar), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Sisa Kekurangan:", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
+                                Text(formatRupiah(currentSisa), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.ExtraBold, color = Color(0xFFDC2626))
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = tambahanBayarText,
+                        onValueChange = { tambahanBayarText = it },
+                        label = { Text("Nominal Pembayaran Baru (Rp)") },
+                        modifier = Modifier.fillMaxWidth().testTag("dialog_input_tambah_bayar"),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        placeholder = { Text("Contoh: ${formatDouble(currentSisa)}") }
+                    )
+
+                    // Shortcut Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        AssistChip(
+                            onClick = { tambahanBayarText = formatDouble(currentSisa) },
+                            label = { Text("Bayar Sisa (Lunas)", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1.3f)
+                        )
+                        if (currentSisa >= 10000.0) {
+                            AssistChip(
+                                onClick = { tambahanBayarText = formatDouble(currentSisa * 0.5) },
+                                label = { Text("50%", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.weight(0.8f)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = Color(0xFFFFFBEB),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(0.8.dp, Color(0xFFFDE68A)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Uang Masuk ke Kas:", style = MaterialTheme.typography.labelSmall, color = Color(0xFF92400E))
+                                Text(formatRupiah(enteredAdditional), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Sisa Setelah Pembayaran:", style = MaterialTheme.typography.labelSmall, color = Color(0xFF92400E))
+                                Text(
+                                    if (sisaSetelahBayar <= 0.0) "LUNAS (Rp 0)" else formatRupiah(sisaSetelahBayar),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (sisaSetelahBayar <= 0.0) Color(0xFF166534) else Color(0xFFDC2626)
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "* Dana ${formatRupiah(enteredAdditional)} akan langsung dialirkan secara proporsional ke pos kas. Jika sisa menjadi Rp 0, pesanan otomatis berpindah ke tab Lunas.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = parseDoubleInput(tambahanBayarText) ?: 0.0
+                        if (amt > 0) {
+                            viewModel.addOrderPayment(targetOrder, amt)
+                            val isNowLunas = (targetOrder.effectiveJumlahDibayar + amt) >= targetOrder.totalPendapatan
+                            Toast.makeText(
+                                context,
+                                if (isNowLunas) "Pesanan '${targetOrder.namaPesanan}' LUNAS & autoplotting selesai!"
+                                else "Pembayaran ${formatRupiah(amt)} diterima & berhasil diautoplotting!",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            payingOrder = null
+                            tambahanBayarText = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD97706),
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier.testTag("dialog_submit_tambah_bayar")
+                ) {
+                    Text("Terima & Autoplotting", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    payingOrder = null
+                    tambahanBayarText = ""
+                }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Dialog Langsung Lunas
+    if (showPayConfirmOrder != null) {
+        val targetOrder = showPayConfirmOrder!!
+        AlertDialog(
+            onDismissRequest = { showPayConfirmOrder = null },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(MintAurora, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = HijauGelap,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    "Pelunasan Penuh & Auto-Plotting",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tandai pesanan ini sebagai LUNAS dan alirkan sisa dana ke kas?")
+                    Surface(
+                        color = colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(targetOrder.namaPesanan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Total Tagihan: ${formatRupiah(targetOrder.totalPendapatan)}", style = MaterialTheme.typography.bodySmall)
+                            Text("Sudah Dibayar: ${formatRupiah(targetOrder.effectiveJumlahDibayar)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF166534))
+                            Text("Sisa Dilunasi: ${formatRupiah(targetOrder.sisaKekurangan)}", color = colorScheme.primary, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+                    Text(
+                        "* Seluruh sisa kekurangan tagihan akan langsung dialirkan penuh ke pos kas (Kertas, Tinta, Pengemasan, Operasional, dan Laba Bersih).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.quickPayOrder(targetOrder)
+                        showPayConfirmOrder = null
+                        Toast.makeText(context, "Pesanan '${targetOrder.namaPesanan}' berhasil dilunasi & seluruh dana terplotting!", Toast.LENGTH_LONG).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2E7D32),
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier.testTag("dialog_submit_quick_pay")
+                ) {
+                    Text("Ya, Lunasi Sekarang", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPayConfirmOrder = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             Card(
@@ -992,7 +1266,7 @@ fun PendingBayarTab(
                         }
 
                         Text(
-                            text = formatRupiah(totalPendingAmount),
+                            text = formatRupiah(totalPendingKekurangan),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = MagentaLembut
@@ -1000,7 +1274,7 @@ fun PendingBayarTab(
                     }
 
                     Text(
-                        text = "[Info] Klik tombol 'Bayar & Plotting Sekarang' untuk melunasi nota. Dana akan otomatis dialirkan ke masing-masing dompet alokasi kas (Kertas, Tinta, Pengemasan, Operasional, Laba Bersih).",
+                        text = "[Info] Terdapat dana sisa tertunda ${formatRupiah(totalPendingKekurangan)} dari total tagihan ${formatRupiah(totalTagihanPending)}. Dana ${formatRupiah(totalSudahDibayar)} telah masuk kas & diautoplotting. Gunakan tombol 'Bayar Lagi' atau 'Langsung Lunas' untuk menerima pembayaran.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant
                     )
@@ -1014,7 +1288,7 @@ fun PendingBayarTab(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Kotak 1: Total Pending Bayar - Soft Lavender/Lilac (#F3E8FF)
+                // Kotak 1: Total Sisa Kekurangan - Soft Lavender/Lilac (#F3E8FF)
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(16.dp),
@@ -1046,7 +1320,7 @@ fun PendingBayarTab(
                                 )
                             }
                             Text(
-                                text = "Total Pending",
+                                text = "Sisa Kekurangan",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF581C87)
@@ -1054,13 +1328,13 @@ fun PendingBayarTab(
                         }
 
                         Text(
-                            text = formatRupiah(totalPendingAmount),
+                            text = formatRupiah(totalPendingKekurangan),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF4C1D95)
                         )
                         Text(
-                            text = "${pendingOrders.size} Nota Tertunda",
+                            text = "${pendingOrders.size} Nota ‚Ä¢ ${formatRupiah(totalSudahDibayar)} Masuk Kas",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF6B46C1),
                             fontWeight = FontWeight.Medium
@@ -1197,7 +1471,7 @@ fun PendingBayarTab(
         } else {
             items(filteredList, key = { it.idOrder }) { order ->
                 var showDeleteConfirm by remember { mutableStateOf(false) }
-                var showPayConfirm by remember { mutableStateOf(false) }
+                val isPartiallyPaid = order.effectiveJumlahDibayar > 0.0
 
                 if (showDeleteConfirm) {
                     AlertDialog(
@@ -1218,79 +1492,13 @@ fun PendingBayarTab(
                     )
                 }
 
-                if (showPayConfirm) {
-                    AlertDialog(
-                        onDismissRequest = { showPayConfirm = false },
-                        icon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(MintAurora, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = HijauGelap,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        },
-                        title = {
-                            Text(
-                                "Pelunasan & Auto-Plotting",
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Apakah Anda yakin ingin menandai pesanan ini sebagai LUNAS?")
-                                Surface(
-                                    color = colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text(order.namaPesanan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                        Text("Nominal: ${formatRupiah(order.totalPendapatan)}", color = colorScheme.primary, fontWeight = FontWeight.ExtraBold)
-                                    }
-                                }
-                                Text(
-                                    "* Dana akan otomatis dialirkan ke pos kas (Kertas, Tinta, Pengemasan, Operasional, dan Laba Bersih).",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colorScheme.onSurfaceVariant
-                                )
-                            }
-                        },
-                        confirmButton = {
-                            Button(
-                                onClick = {
-                                    viewModel.quickPayOrder(order)
-                                    showPayConfirm = false
-                                    Toast.makeText(context, "Pesanan '${order.namaPesanan}' berhasil dilunasi & dana terplotting!", Toast.LENGTH_LONG).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF2E7D32),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Text("Ya, Lunasi Sekarang", fontWeight = FontWeight.Bold)
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showPayConfirm = false }) {
-                                Text("Batal")
-                            }
-                        }
-                    )
-                }
-
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("pending_order_card_${order.idOrder}"),
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                    border = BorderStroke(1.2.dp, LilacBorder.copy(alpha = 0.8f)),
+                    border = BorderStroke(1.2.dp, if (isPartiallyPaid) Color(0xFFF59E0B).copy(alpha = 0.7f) else LilacBorder.copy(alpha = 0.8f)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
@@ -1310,73 +1518,127 @@ fun PendingBayarTab(
                                     color = colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "[Kalender] Tanggal Order: ${order.tanggalOrder}",
+                                    text = "[Kalender] Tanggal Order: ${order.tanggalOrder} ‚Ä¢ Vol: ${order.qtyOrder} ${order.satuan}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colorScheme.onSurfaceVariant
                                 )
                             }
                             Surface(
-                                color = PinkAurora,
-                                shape = RoundedCornerShape(100.dp)
+                                color = if (isPartiallyPaid) Color(0xFFFEF3C7) else PinkAurora,
+                                shape = RoundedCornerShape(100.dp),
+                                border = if (isPartiallyPaid) BorderStroke(1.dp, Color(0xFFFCD34D)) else null
                             ) {
                                 Text(
-                                    text = "BELUM LUNAS",
+                                    text = if (isPartiallyPaid) "DP/SEBAGIAN" else "BELUM DIBAYAR",
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = MagentaLembut
+                                    color = if (isPartiallyPaid) Color(0xFFB45309) else MagentaLembut
                                 )
                             }
                         }
 
-                        HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text("Volume Order", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
-                                Text("${order.qtyOrder} ${order.satuan}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Harga Satuan", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
-                                Text(formatRupiah(order.hargaSatuan), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Total Tagihan", style = MaterialTheme.typography.bodySmall, color = colorScheme.onSurfaceVariant)
-                                Text(
-                                    formatRupiah(order.totalPendapatan),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colorScheme.primary
-                                )
-                            }
-                        }
-
-                        // Estimasi Alokasi Hasil Plotting Bar
-                        val kertasHpp = accounts.find { it.namaAkun.contains("Kertas") }?.konstanHppUnit?.toDouble() ?: 106.0
-                        val tintaHpp = accounts.find { it.namaAkun.contains("Tinta") }?.konstanHppUnit?.toDouble() ?: 25.0
-                        val alokasiKertasEst = order.qtyOrder.toDouble() * kertasHpp
-                        val alokasiTintaEst = order.qtyOrder.toDouble() * tintaHpp
-                        val alokasiLabaEst = (order.qtyOrder.toDouble() * order.hargaSatuan) - (alokasiKertasEst + alokasiTintaEst + (order.jumlahPlastikPengemasan * 300.0))
-
+                        // Rincian Pembayaran (Total, Sudah Dibayar, Sisa Tagihan)
                         Surface(
-                            color = colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(10.dp)
+                            color = Color(0xFFF9FAFB),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFFF3F4F6)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceAround
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("[Paket] Kertas: ${formatRupiah(alokasiKertasEst)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
-                                Text(" Tinta: ${formatRupiah(alokasiTintaEst)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
-                                Text("* Laba: ${formatRupiah(if (alokasiLabaEst > 0) alokasiLabaEst else 0.0)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                Column {
+                                    Text("Total Tagihan", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                                    Text(formatRupiah(order.totalPendapatan), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Sudah Dibayar", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                                    Text(
+                                        formatRupiah(order.effectiveJumlahDibayar),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isPartiallyPaid) Color(0xFF166534) else colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Sisa Tagihan", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                                    Text(
+                                        formatRupiah(order.sisaKekurangan),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFDC2626)
+                                    )
+                                }
                             }
                         }
 
+                        // Progres Pembayaran Bar
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "Progres Pelunasan",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "${(order.paymentRatio * 100).toInt()}% (${formatRupiah(order.effectiveJumlahDibayar)} / ${formatRupiah(order.totalPendapatan)})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isPartiallyPaid) Color(0xFFD97706) else colorScheme.onSurfaceVariant
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { order.paymentRatio.toFloat().coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = Color(0xFF10B981),
+                                trackColor = Color(0xFFE5E7EB)
+                            )
+                        }
+
+                        // Alokasi Kas Berdasarkan Uang Riil yang Masuk (Autoplotting)
+                        val actualPlottedKertas = order.qtyOrder.toDouble() * kertasHpp * order.paymentRatio
+                        val actualPlottedTinta = order.qtyOrder.toDouble() * tintaHpp * order.paymentRatio
+                        val fullLabaEst = ((order.totalPendapatan - (order.qtyOrder * (kertasHpp + tintaHpp) + order.jumlahPlastikPengemasan * 300.0)).coerceAtLeast(0.0))
+                        val actualPlottedLaba = fullLabaEst * order.paymentRatio
+
+                        Surface(
+                            color = colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(
+                                    text = if (isPartiallyPaid) "Teralirkan ke Kas Riil (${(order.paymentRatio * 100).toInt()}%):" else "Estimasi Alokasi Kas (Saat Lunas):",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Kertas: ${formatRupiah(if (isPartiallyPaid) actualPlottedKertas else order.qtyOrder.toDouble() * kertasHpp)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                                    Text("Tinta: ${formatRupiah(if (isPartiallyPaid) actualPlottedTinta else order.qtyOrder.toDouble() * tintaHpp)}", style = MaterialTheme.typography.labelSmall, color = colorScheme.onSurfaceVariant)
+                                    Text("Laba: ${formatRupiah(if (isPartiallyPaid) actualPlottedLaba else fullLabaEst)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                }
+                            }
+                        }
+
+                        // Tombol Aksi: Hapus, Bayar Lagi (Cicil), Langsung Lunas
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1390,17 +1652,35 @@ fun PendingBayarTab(
                                 )
                             }
 
-                            Button(
-                                onClick = { showPayConfirm = true },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF2E7D32),
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Lunasi & Plotting Sekarang", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        payingOrder = order
+                                        tambahanBayarText = formatDouble(order.sisaKekurangan)
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.2.dp, Color(0xFFD97706)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB45309)),
+                                    modifier = Modifier.testTag("btn_bayar_lagi_${order.idOrder}")
+                                ) {
+                                    Icon(Icons.Default.Payments, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Bayar Lagi", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                                }
+
+                                Button(
+                                    onClick = { showPayConfirmOrder = order },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF2E7D32),
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.testTag("btn_langsung_lunas_${order.idOrder}")
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Langsung Lunas", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
@@ -2252,7 +2532,8 @@ fun DashboardTab(
     accounts: List<MasterAkunSaldo>,
     userProfile: UserProfile,
     onNavigateToOrderNota: () -> Unit = {},
-    onNavigateToAuditKas: () -> Unit = {}
+    onNavigateToAuditKas: () -> Unit = {},
+    onNavigateToInventaris: () -> Unit = {}
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val chartFilter by viewModel.customerChartFilter.collectAsStateWithLifecycle()
@@ -2268,7 +2549,7 @@ fun DashboardTab(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Section: Executive Summary Cards
         item {
@@ -2282,7 +2563,7 @@ fun DashboardTab(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp)
+                    modifier = Modifier.padding(16.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2295,30 +2576,18 @@ fun DashboardTab(
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF554B6E)
                         )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFEDE4FF),
-                            border = BorderStroke(1.dp, Color(0xFFD3C5EE)),
-                            modifier = Modifier.clickable { onNavigateToAuditKas() }
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(Color(0xFFEDE4FF), CircleShape),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FactCheck,
-                                    contentDescription = null,
-                                    tint = Color(0xFF6A4C93),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "Audit Selisih",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF6A4C93)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = Color(0xFF6A4C93),
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -2937,8 +3206,8 @@ fun PosAllocationComparisonSection(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header
             Row(
@@ -4312,7 +4581,7 @@ fun DompetScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             WalletEnvelopesSection(rows = rows, viewModel = viewModel, onNavigateToAuditKas = onNavigateToAuditKas)
@@ -4772,7 +5041,7 @@ fun CustomerOrderFrequencyChart(
         border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -4946,6 +5215,44 @@ fun CustomerOrderFrequencyChart(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OrderDatePickerDialog(
+    onDateSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val datePickerState = rememberDatePickerState()
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val date = java.time.Instant.ofEpochMilli(millis)
+                            .atZone(java.time.ZoneId.of("UTC"))
+                            .toLocalDate()
+                        onDateSelected(date.toString())
+                    }
+                    onDismiss()
+                }
+            ) {
+                Text("Pilih", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        },
+        shape = RoundedCornerShape(24.dp),
+        colors = DatePickerDefaults.colors(
+            containerColor = Color.White
+        )
+    ) {
+        DatePicker(state = datePickerState)
+    }
+}
+
 // ==========================================
 // TAB 2: INPUT TRANSAKSI (Form Order Masuk)
 // ==========================================
@@ -4980,7 +5287,8 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
 
     var hargaSatuanText by remember { mutableStateOf("") }
     var jumlahPlastikText by remember { mutableStateOf("") }
-    var isLunas by remember { mutableStateOf(true) } // true: Lunas, false: Belum Lunas
+    var metodePembayaran by remember { mutableStateOf("Bayar Penuh") } // "DP", "Bayar Sebagian", "Bayar Penuh"
+    var nominalDibayarText by remember { mutableStateOf("") }
 
     var showErrorAlert by remember { mutableStateOf(false) }
 
@@ -5013,7 +5321,8 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
         selectedSatuanName = if (order.satuan.isBlank()) "Default" else order.satuan
         hargaSatuanText = formatDouble(order.hargaSatuan)
         jumlahPlastikText = order.jumlahPlastikPengemasan.toString()
-        isLunas = (order.status == "Lunas")
+        metodePembayaran = if (order.status == "Lunas") "Bayar Penuh" else if (order.metodePembayaran.isNotBlank()) order.metodePembayaran else if (order.effectiveJumlahDibayar > 0) "Bayar Sebagian" else "DP"
+        nominalDibayarText = if (order.status == "Lunas") "" else if (order.jumlahDibayar > 0) formatDouble(order.jumlahDibayar) else ""
         showErrorAlert = false
     }
 
@@ -5138,6 +5447,8 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                                 hargaSatuanText = ""
                                 jumlahPlastikText = ""
                                 selectedSatuanName = "Default"
+                                metodePembayaran = "Bayar Penuh"
+                                nominalDibayarText = ""
                                 showErrorAlert = false
                             }
                         ) {
@@ -5160,8 +5471,8 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = if (editingOrderId != null) "Edit Transaksi Order #${editingOrderId}" else "Input Transaksi Order Baru",
@@ -5428,41 +5739,180 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                         }
                     }
 
-                    // Status segment
-                    Column {
+                    // Tiga Opsi Pembayaran: DP, Bayar Sebagian, Bayar Penuh
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "Status Pembayaran",
+                            "Metode & Status Pembayaran",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             ElevatedFilterChip(
-                                selected = isLunas,
-                                onClick = { isLunas = true },
-                                label = { Text("Lunas") },
+                                selected = metodePembayaran == "DP",
+                                onClick = {
+                                    metodePembayaran = "DP"
+                                    if (nominalDibayarText.isBlank() && realTimeTotal > 0) {
+                                        nominalDibayarText = formatDouble(realTimeTotal * 0.5)
+                                    }
+                                },
+                                label = { Text("DP") },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .testTag("chip_status_lunas"),
-                                leadingIcon = if (isLunas) {
+                                    .testTag("chip_metode_dp"),
+                                leadingIcon = if (metodePembayaran == "DP") {
                                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 } else null
                             )
                             ElevatedFilterChip(
-                                selected = !isLunas,
-                                onClick = { isLunas = false },
-                                label = { Text("Belum Lunas") },
+                                selected = metodePembayaran == "Bayar Sebagian",
+                                onClick = {
+                                    metodePembayaran = "Bayar Sebagian"
+                                    if (nominalDibayarText.isBlank() && realTimeTotal > 0) {
+                                        nominalDibayarText = formatDouble(realTimeTotal * 0.5)
+                                    }
+                                },
+                                label = { Text("Bayar Sebagian") },
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("chip_status_belum"),
-                                leadingIcon = if (!isLunas) {
+                                    .weight(1.3f)
+                                    .testTag("chip_metode_sebagian"),
+                                leadingIcon = if (metodePembayaran == "Bayar Sebagian") {
                                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 } else null
                             )
+                            ElevatedFilterChip(
+                                selected = metodePembayaran == "Bayar Penuh",
+                                onClick = {
+                                    metodePembayaran = "Bayar Penuh"
+                                    nominalDibayarText = ""
+                                },
+                                label = { Text("Bayar Penuh") },
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .testTag("chip_metode_penuh"),
+                                leadingIcon = if (metodePembayaran == "Bayar Penuh") {
+                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null
+                            )
+                        }
+
+                        // Dinamis Input Nominal yang Dibayarkan (untuk DP & Bayar Sebagian)
+                        if (metodePembayaran != "Bayar Penuh") {
+                            val parsedNominal = parseDoubleInput(nominalDibayarText) ?: 0.0
+                            val enteredPaid = parsedNominal.coerceIn(0.0, realTimeTotal)
+                            val sisaKekurangan = (realTimeTotal - enteredPaid).coerceAtLeast(0.0)
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFFFF7ED), RoundedCornerShape(14.dp))
+                                    .border(1.dp, Color(0xFFFFEDD5), RoundedCornerShape(14.dp))
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (metodePembayaran == "DP") "Uang Muka (DP) Diterima" else "Nominal Dibayarkan Saat Ini",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFC2410C)
+                                    )
+                                    Text(
+                                        text = "Acuan Autoplotting Kas",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFFEA580C),
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = nominalDibayarText,
+                                    onValueChange = { nominalDibayarText = it },
+                                    label = { Text("Nominal yang Dibayarkan (Rp)") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("input_order_nominal_dibayar"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    colors = customFieldColors,
+                                    shape = customFieldShape,
+                                    singleLine = true,
+                                    placeholder = { Text("Contoh: 50000") }
+                                )
+
+                                // Shortcut buttons (25%, 50%, 75%, Lunas)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(0.25 to "25%", 0.50 to "50%", 0.75 to "75%", 1.0 to "Lunas").forEach { (ratio, label) ->
+                                        AssistChip(
+                                            onClick = {
+                                                if (realTimeTotal > 0) {
+                                                    nominalDibayarText = formatDouble(realTimeTotal * ratio)
+                                                }
+                                            },
+                                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    color = Color.White,
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(0.8.dp, Color(0xFFFED7AA))
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Uang Masuk ke Kas (Autoplotting):", style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C2D12))
+                                            Text(formatRupiah(enteredPaid), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Sisa Tagihan (Pending):", style = MaterialTheme.typography.bodySmall, color = Color(0xFF7C2D12))
+                                            Text(formatRupiah(sisaKekurangan), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Surface(
+                                color = Color(0xFFECFDF5),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, Color(0xFFA7F3D0)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(18.dp))
+                                    Text(
+                                        text = "Bayar Penuh: ${formatRupiah(realTimeTotal)} masuk penuh ke kas & autoplotting 100%.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF065F46),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -5490,6 +5940,14 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                                     showNewCustomerDialog = true
                                 } else {
                                     val finalOrderName = if (namaPesanan.isNotBlank()) "$customerName - $namaPesanan" else customerName
+                                    val actualTotal = qty.toDouble() * harga
+                                    val enteredPaid = if (metodePembayaran == "Bayar Penuh") {
+                                        actualTotal
+                                    } else {
+                                        (parseDoubleInput(nominalDibayarText) ?: 0.0).coerceIn(0.0, actualTotal)
+                                    }
+                                    val finalStatus = if (enteredPaid >= actualTotal && actualTotal > 0.0) "Lunas" else "Belum Lunas"
+
                                     if (editingOrderId != null) {
                                         val existingOrder = orders.find { it.idOrder == editingOrderId }
                                         val updatedOrder = (existingOrder ?: TransaksiOrderMasuk(
@@ -5500,7 +5958,9 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                                             satuan = selectedSatuanName,
                                             hargaSatuan = harga,
                                             jumlahPlastikPengemasan = plastik,
-                                            status = if (isLunas) "Lunas" else "Belum Lunas"
+                                            status = finalStatus,
+                                            jumlahDibayar = enteredPaid,
+                                            metodePembayaran = metodePembayaran
                                         )).copy(
                                             tanggalOrder = tanggal,
                                             namaPesanan = finalOrderName,
@@ -5508,7 +5968,9 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                                             satuan = selectedSatuanName,
                                             hargaSatuan = harga,
                                             jumlahPlastikPengemasan = plastik,
-                                            status = if (isLunas) "Lunas" else "Belum Lunas"
+                                            status = finalStatus,
+                                            jumlahDibayar = enteredPaid,
+                                            metodePembayaran = metodePembayaran
                                         )
                                         viewModel.updateOrder(updatedOrder)
                                         editingOrderId = null
@@ -5520,7 +5982,10 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                                             satuan = selectedSatuanName,
                                             harga = harga,
                                             plastik = plastik,
-                                            status = if (isLunas) "Lunas" else "Belum Lunas"
+                                            status = finalStatus,
+                                            kategori = "Umum",
+                                            jumlahDibayar = enteredPaid,
+                                            metodePembayaran = metodePembayaran
                                         )
                                     }
                                     // Clear Form
@@ -5530,6 +5995,8 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
                                     hargaSatuanText = ""
                                     jumlahPlastikText = ""
                                     selectedSatuanName = "Default"
+                                    metodePembayaran = "Bayar Penuh"
+                                    nominalDibayarText = ""
                                     showErrorAlert = false
                                 }
                             } else {
@@ -5765,13 +6232,14 @@ fun OrderHistoryCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
+                val isPartiallyPaid = order.effectiveJumlahDibayar > 0.0 && !isLunas
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Surface(
-                        color = if (isLunas) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
-                        border = BorderStroke(1.dp, if (isLunas) Color(0xFFA5D6A7) else Color(0xFFEF9A9A)),
+                        color = if (isLunas) Color(0xFFE8F5E9) else if (isPartiallyPaid) Color(0xFFFEF3C7) else Color(0xFFFFEBEE),
+                        border = BorderStroke(1.dp, if (isLunas) Color(0xFFA5D6A7) else if (isPartiallyPaid) Color(0xFFFCD34D) else Color(0xFFEF9A9A)),
                         shape = RoundedCornerShape(100.dp)
                     ) {
                         Row(
@@ -5782,13 +6250,13 @@ fun OrderHistoryCard(
                             Box(
                                 modifier = Modifier
                                     .size(6.dp)
-                                    .background(if (isLunas) Color(0xFF2E7D32) else Color(0xFFC62828), CircleShape)
+                                    .background(if (isLunas) Color(0xFF2E7D32) else if (isPartiallyPaid) Color(0xFFD97706) else Color(0xFFC62828), CircleShape)
                             )
                             Text(
-                                text = if (isLunas) "LUNAS" else "PENDING",
+                                text = if (isLunas) "LUNAS" else if (isPartiallyPaid) "DP/SEBAGIAN" else "PENDING",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = if (isLunas) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                color = if (isLunas) Color(0xFF2E7D32) else if (isPartiallyPaid) Color(0xFFB45309) else Color(0xFFC62828)
                             )
                         }
                     }
@@ -6056,8 +6524,8 @@ fun MutationsTab(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = "Input Mutasi Manual Kas",
@@ -7176,7 +7644,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Sistem akan membersihkan seluruh data pelanggan lama di Firestore & database lokal, kemudian mengisi 5 data pelanggan bawaan (SMKN 1 Kaligondang):",
+                        text = "Sistem akan membersihkan seluruh data pelanggan lama di Firestore & database lokal, kemudian mengisi 6 data pelanggan bawaan:",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colorScheme.onSurfaceVariant
                     )
@@ -7390,7 +7858,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Section header
                     item {
@@ -7413,7 +7881,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                     // Grid Menus
                     item {
                         Column(
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             // Menu 1: Master Pelanggan
@@ -7431,7 +7899,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(20.dp),
+                                        .padding(16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Surface(
@@ -7499,7 +7967,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(20.dp),
+                                        .padding(16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Surface(
@@ -7561,7 +8029,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Back and Header Row
                     item {
@@ -7887,7 +8355,7 @@ fun MasterDataTab(viewModel: FinanceViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Back and Header Row
                     item {
@@ -8771,6 +9239,347 @@ fun DetailLedgerDialog(
 }
 
 // ==========================================
+// DRAWER: BACKUP & RESTORE DATA
+// ==========================================
+@Composable
+fun BackupRestoreTab(viewModel: FinanceViewModel) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val colorScheme = MaterialTheme.colorScheme
+
+    val backupsList by viewModel.backupsList.collectAsStateWithLifecycle(emptyList())
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val isCloudOnline by viewModel.isCloudOnline.collectAsStateWithLifecycle()
+    val syncStatusText by viewModel.syncStatusText.collectAsStateWithLifecycle()
+    val lastSyncTime by viewModel.lastSyncTime.collectAsStateWithLifecycle()
+
+    var backupToDelete by remember { mutableStateOf<BackupFile?>(null) }
+    var backupToRestore by remember { mutableStateOf<BackupFile?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadBackupFiles(context)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Header
+        Text(
+            text = "Cadangan & Pemulihan Data",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = colorScheme.onSurface
+        )
+        Text(
+            text = "Kelola sinkronisasi awan (cloud) dan cadangan berkas lokal JSON untuk menjaga keamanan data transaksi Anda.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colorScheme.onSurfaceVariant
+        )
+
+        // Card 1: Cloud Sync
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isCloudOnline) Color(0xFFE6F4EA) else Color(0xFFFCE8E6)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isCloudOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                            contentDescription = "Cloud",
+                            tint = if (isCloudOnline) Color(0xFF137333) else Color(0xFFC5221F)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Sinkronisasi Cloud Firebase",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isCloudOnline) "Cloud Terhubung ‚Ä¢ $syncStatusText" else "Mode Offline ‚Ä¢ Menyimpan Lokal",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isCloudOnline) Color(0xFF137333) else Color(0xFFC5221F)
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        viewModel.triggerCloudSync()
+                        Toast.makeText(context, "Sinkronisasi cloud dimulai...", Toast.LENGTH_SHORT).show()
+                    },
+                    enabled = !isSyncing,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isSyncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sedang Sinkronisasi...")
+                    } else {
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sinkronkan ke Cloud Sekarang")
+                    }
+                }
+            }
+        }
+
+        // Card 2: Local Backup
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFEDE7F6)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Backup,
+                            contentDescription = "Backup",
+                            tint = Color(0xFF6B46C1)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Cadangan Lokal (Offline JSON)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Simpan salinan database lengkap ke penyimpanan perangkat.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        val success = viewModel.createLocalBackup(context)
+                        if (success) {
+                            Toast.makeText(context, "Cadangan lokal berhasil dibuat!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Gagal membuat cadangan lokal.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF6B46C1),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Buat Cadangan Baru Sekarang")
+                }
+            }
+        }
+
+        // Card 3: Daftar Berkas Cadangan
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Riwayat Berkas Cadangan",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = { viewModel.loadBackupFiles(context) }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = colorScheme.primary)
+                    }
+                }
+
+                if (backupsList.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Belum ada berkas cadangan lokal tersimpan.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    backupsList.forEach { backup ->
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F5FC)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = backup.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "${backup.dateFormatted} ‚Ä¢ ${String.format(Locale.US, "%.1f", backup.sizeKb)} KB",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    FilledTonalButton(
+                                        onClick = { backupToRestore = backup },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Pulihkan", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                    IconButton(onClick = { backupToDelete = backup }) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Hapus",
+                                            tint = Color(0xFFC5221F)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialog Konfirmasi Pulihkan
+    if (backupToRestore != null) {
+        val file = backupToRestore!!
+        AlertDialog(
+            onDismissRequest = { backupToRestore = null },
+            title = { Text("Pulihkan Cadangan?") },
+            text = {
+                Text(
+                    "Memulihkan data dari berkas '${file.name}' akan menimpa data transaksi saat ini dengan isi cadangan tersebut. Lanjutkan?"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            try {
+                                val jsonStr = File(file.absolutePath).readText()
+                                val success = viewModel.restoreFromJsonString(jsonStr)
+                                if (success) {
+                                    Toast.makeText(context, "Data berhasil dipulihkan!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Gagal memulihkan data.", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Terjadi kesalahan: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        backupToRestore = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B46C1))
+                ) {
+                    Text("Ya, Pulihkan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { backupToRestore = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Dialog Konfirmasi Hapus
+    if (backupToDelete != null) {
+        val file = backupToDelete!!
+        AlertDialog(
+            onDismissRequest = { backupToDelete = null },
+            title = { Text("Hapus Berkas Cadangan?") },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus berkas cadangan '${file.name}' secara permanen?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val success = viewModel.deleteBackupFile(context, file)
+                        if (success) {
+                            Toast.makeText(context, "Berkas cadangan berhasil dihapus", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Gagal menghapus berkas cadangan", Toast.LENGTH_SHORT).show()
+                        }
+                        backupToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC5221F))
+                ) {
+                    Text("Hapus")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { backupToDelete = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+}
+
+// ==========================================
 // TAB 5: PENGATURAN FINANSIAL (Financial Settings)
 // ==========================================
 @OptIn(ExperimentalMaterial3Api::class)
@@ -8828,7 +9637,7 @@ fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary)
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             Text(
@@ -9241,7 +10050,7 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
         item {
             Text(
@@ -9806,7 +10615,7 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
                         Text(
@@ -9844,7 +10653,7 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
                         Text(
@@ -10135,21 +10944,21 @@ fun exportToExcel(
         writer.write("REKAPITULASI DATA PERFORMA\n")
         writer.write("Total Unit Terproduksi:\t$totalUnits pcs\n")
         writer.write("Total Omzet:\t${formatRupiah(totalOmzet)}\n")
-        wrixúÏ]Îr€:í˛üß¿®≤;‘â√¯{◊$g$Kä}|ëKíì⁄©T•`≤pDë¥£§\5œ2è∂O≤›‡§xì,Á8ª?äçF„Î@F0Wøsπ`ZcdjíKf›0”ß.µ»π/®«?ãÁﬂ'∂;ßb‡;úN5Å5Ò°‡∂’˜EÛ˛≥ıŸj4üë∞ƒít‹√Ò…p‘úê—†u1lùO»áV˚Í‚CÎ"’:›hD≠õj~ø1ã{dåytÊÒœ¢√ºôÀèø:e– ÍQÎ≥∏∞Á‹ÇÅúR/üß±=øÊ3Œ∏'tWóéß‰;ÅŒÊ‰Â˚∏ñ[†cŸÛ°p…;¬'D√J∫ˆ˛Ÿní∆ãåt‘:Õ˚a¶«H„e¶÷ÀLµTøi	<ˇ.Îä@˜8Ú∆Ô(ê‰ßâo\ßpüƒÙΩ©T ?8NﬂÂ‰/ÔàÂõfì|è⁄V˜´cªbËè«ÃÛ¥	7Ÿù≥-∂HÉ:é…«R-^›ZÜn;Ã˙:7ÉÅ{/Ì…Ñèôaè˝9≥ÑÓ9.£Ü7eLÃM]˛≤{-ÈxdSò¨9ù±˚*¥±m	¯z¸@A$déJ;ÛÄ5“˝:ffc+lq÷Ω¯0:˛2<ÓFMË¬æã«{ˇÏŸƒ∑ìŸó∆D{®á§}Hé¬N‰]OPWt®`á‰ ≠õ‡6≥åÂõry\Y\xá‰ƒ Õ˛¸ €ø6ôr_YKÈß™Æ¸˚∑£÷1¸∞›≈	L˝˚†rfvârEÆpvÇM–qÇÃ=ã&ï<öHPÛ∆"‘˙r…Ê◊˛Ãá´Áﬂ„·ﬂ6¸«}Ø;∆§SA≠yG<zÀFò—∫…l%Íí“§Ã€é/ÄMFS+ICùN®7–≈eÚKk¶Í	.LvIyPˇ’ö:v∂P¥)ê¨i„™¶ñ·⁄‹–o\ÍL˘ÿ”èÅﬁ>kù¶‡Ü¸ähÁÕ$ıà{=–Ã∂m®ùPA∏>ÀYw»†Á_è6ƒcÁÙ√†ıﬂÖLÓN
-Xò¬™cÓ£ig}!]€∆‚—˘€.íè	ÀkΩüçñ¶«Æ=cü∏!¶»Å Ä¬ÅKz√.¸9÷Y∫bMÏÙ–/√€z€Á&L≠∂ˇvãºyΩªQjÍcXU`LöKÙÄñ≤∏tπ“ë†uñn2¶÷-ı∞<÷É_iÊµ"‹†én∏ÙNÇw„¨uŸÄ\vœ€WßWxı°C˙ÉNw@¥›Ì›ÌóÁ†	 d∂»bKY’	3Ú‚Ÿ-Îg „õIB‚ê<èaå@=Ú<D1¢]2ó€#≠ô ÎóÀBj›f∏ÿ.‚;Ø^ëõQáﬂÔâŸQÆÑÕÓiÎÚdtu÷áË≤;ËıÁ≠A(K7√√Œ~â$~!Åsá∏OFÃu\€¡áë$∆ä8c∫⁄ªä◊‡:ÖÜ.œoîè¿·ŸPO9˛jn∑)wµFÁ{˚È9Q0 D™@1S≈n≠9‹›ŒÎÛX÷/Ó4TÔ™ñ⁄IZÌÏÆ‘,ˆ∫…+í¯›@gw{%:äüé¨TJ'_Œ ¨µh‡˚—¨∆û£RÀÿwﬁ:·z ÚûºÅë73∆ãä´“û∆¿⁄\Æ ıãπO6Ö˙*Õê?-¯˙g+e@T
-®≠Æ ÖÌÎ©taÛ5Uªêﬁ**û/≠Í9ƒk´|äÊNÜ®‚r‰1ØÜú…t‰†eacû*sQ–v)‡Ü8v¨Ü€q\´õÄı‡9ΩpníÃ3Œ•∂∑€$/HC◊ı0ÏNW*ÂªUf∫.∑há˛la~†<g¢¸¿R≠tÜ†î˜ê	E«Í∞®E&ñ…◊3Ú„âX€¢ü9:ß®U-¯S+…ºƒ»÷‘@0øÊÿ¥=ˆh©ê>4qŸÈ’LC¸ΩÔàK˛¿≈·Å∑®ÌrjÓµ~x8G“k>˚;Ñ˛éÌ°…í©ãæ0ÇÏ%œ‡
-Í€7Zò
-¿˚CfÇÛ…å8ˇQ¬†√Ω9ó©Ç¸ºÄS
-ÙîﬂóÕŸ¸ZÌW>—;À®; ‹¿ Ë√Í::±Úq0Ê|éS¸ÿ?}Ê·¢äom)⁄öpwﬁˆÖ∞-®í∂ª8-¡#Õ∂é`JgKU¢¡y°xê°snö[fƒ˙r•%Z®u9¥rîpâc]˘‹1∂Ï…ıØ5P^ûüø4P°3{LM¶_óÅ––®Õ?lE˛;Ω•∫/∏©è¬õ˙—µ÷∏5Ú	EÛd;ël Grñ3¿f>ô¥Íi!≈Â∫˜Kw‚πŒ¯+˜y",lˇ43òÑÍ}¢1F@vçây)ÓªMa°whº“:—{ÕSFŸTL»¨ı6œ|g¿0Á«¿k’n9ª;áò¬⁄kÃ>Fw‘Tí•¯™è%e¶˚\wL*píu©ca¬S˚Æ(§–pëÍác€Q1‡(ı úµ†Öiª√Òî…åbf#¸≠+œû≈ÆÂ<Ùπ…ıÇƒÉ”ïÿï™Âàìt«Ω·¬æ•€∆∑3-?q1=„6^åÕ4ô#”ˆçæÖf-KJyTì‹[ú¸#∏ ”$ó◊$ÎAu¨‡{“ÔH—L?´ ()ûQﬂÇπ0∫x 44 ™Œ&§MõÅbN◊ã,_§≤…®eƒÍêº´(Mt∞Æ5¸ñã®µoäƒ móéSZK√∫∫++ÎQ=M‰(ºÌÈG)F¥îÅˇ›≥£ùL<£À†Ñv%^D¿ù™ı∫)«ìÉ¬Õ&c©ÇúêÖ iﬂ0b¡9ˇ‘ ˝Õâﬂ"1”ˇZ`õ∑Ãïª.}≈Ö¬¡4’}td
-ìÏŸ¢÷7¢Bñua∑Çµ\ó.¥#∞ÓX¢DÈ7¿&ÈÖæ‘5d‰E@]¶‘„&"8I∏„±1u)0¸‚øÄÅÃ%[Ër-MF≤"•∆H(f ≠‰©ÒÅü,`÷5v(wúT´"Kœtfd	DG†úyÒ¯*‚â]ÕE ìq(.L|Å>"ˇ¸3Œ¡ÕW˚æBBg˝ãÖ∫/µn ≤Gù{ãæØ∞°=ï^∂NO¨¸e ≠Z´T©¶_˚Ä·.32Ω†5#JB«mV©CÕÇÖyO~=$çFÓ≥‹õ(¡∏waãÓ‹àâÑ‚—W
-ı‹¿©Èπˆ\Åºêz˛JâX…ïıä•Ó¬ç™ò„¯&üŒ®ıpêâePœûÊï•PÙ!#Îåz1Ä¡:√â‚F’òKa#Êπ¶qxp:gΩr˙«a©+∑…Gv"(!}∆Da1œ}Å!ÅÙÁ˙ìø%
-ÙÎ{-Ä≤˚ô0dËp¸;s±Ω–O¸∂8≤Mn%à=∑>·Áœ√À‘u‡¿<ß_q√5#›°ÜÅÀ|jª¸õç)‹Ï<–ßôƒm í\6]ÎÜÖõˇ /›s`˛çˆBÀ6±ˆ2ËFn‰ ´è‘ÙaµEî„Nó¢µWØ¢ùªC"}Ç~:p51⁄Nl	Ó§ıà∫Ü∂4˝9“ä$7Ñ5Ö˚®xS*ÆÅÌ[3 ﬁqà7µ›ÌÙÄìÅCxÖ ã\tÿÑÇ}Ùtpöπ+ „ÊÖ€◊¡nıß)å$áﬁµçY&®÷ñCπÉ≠Ì@Á[AKm˚kØ◊}›iı˛´ô”¥¯V:›y,u£áö‹Ó*µw„yâJ"dï≤J‰ë‚Ìº…óñUÙnôÀ"N± 
-—râJ≤éäô"”m&Ó≥ä)≈É7˘çQâÆı#¯√‹èasëK¶ÃóJ`ı˛ã«QW*…TnÁNeùAai€_ÀÜ•
-2ãäÓ!ÜæŒW∂‹cì;Zn
-[ìf_n\$¢%kΩ∑◊ÌˆZyk=[B.õ…RU"«rùTÀüÉˇòn«ß9’¨NSíÚÙ†t˘®ÉIUÈwÂ<ÏO&’2P‰–aﬁÿÂNoh^Î5¡Q§éìI9hΩ>zªn&%∑;{ªΩ›^ç©¬íá?RÔv_◊“ªÚ˘æ`TØ1ﬂ“y´'∂ ÔŸrkÊ⁄˜4N` {<:ı$„âÖπú…«ñgæ∫<†tŒÓœÎQúÄJ|b¸fä,ˆ‚:ûè´´Tä˘ñìΩ◊ﬁ›;x˚–y¬≤≤ê›”≠Mê9√à"»QHÈG~µ≤5ª¨Œçƒ^˛µ-ˇ38ãùû∆òâ¿z√zõö3‹"Œi›U…ªtÓÏÔΩ~ÿ2,Rç!õsTèG[á≈O
-}wÇXiè%^ÏNÅ´ñeEÔv∫Ø{U‚¨Á∏vˆéˆª›*cñáåc‹)í«á™A+	˚ÖÀon¿˜Fı¡ÂRë/¿R7é=O/6&#zŸ.∫Me0äï§ ZWz~X \ˆt¨∏-gR	‰™U	À&˝K,+˘ò’ÜÙ1}û¥ÉÍ˜#˝ó%gÂÅ^â∏óïG∞vô
-≤û:ΩŸî=2È53W0Hè·BÑ3ÛÉMLÊ(ZTé„ï’·∑s⁄9¶ H<Ëc€Yh‘t¶oÎìf3üËüxµ∫Gj˛âŒÑèÁ≈Èl ]:“á
-ø)«ky≤˜˜_∑∫%!˙√«ºº+œ'mìZ3Úù4⁄Ç‚‡∆„¥°0yL1¨øÃWèÍnÊß≤sÛß≠D^An˚0#Ç±Ó&á2ˇÃ§˛ˇŒ§Ê˚FEHVæ¢#;juZ¯˙®›e˜¸ÍÏ‰Æœ[ùì¡I	å≠`´Àc25ﬁÉ›ÜWâ≠XoMØfÆü¢˝´JõKæKLæ±aœØmì¥}*H|N‰ÃûQ≥∞Ux∏Ø+ÀŒäfK—Fˆ
-ÁG≤eÖÕÏ®¨|ò∆D!©€€◊ √Õmm«“Yã;*µ∂∫WïCºÕã√N∂º•T6KˆÀù„’Sw¥ùIE»TñhŸ≠ôhAïLl_ÆÂœR£ß¢—˙[(ı‚⁄“òñﬁ≤ñ)joM¨“§o™£˚“ß2<pµ\ê{PΩwS/òçÏc
-Fk≤ıc›Dxô\Så°$ñƒxtÉ74~ˆ/
-k˜}Å…]„1å ù;Öáˇœœ„ÀÒÒ|Óy©7 RGÚkÏ‚Âü∆è¥içÀù/By3•+ßcã ”±z^vUÎ¢ù“A∆OØ¥≈hÖˇD∆ä!£Çˇ7p1ˇnÓÌ)/ì3q.Ñ¡q¡nt¯:∑q]‡¨öy'ã# £xΩ?…9‹Œ‰´_Í¯ßD9J¿Ï!—Ä¨àΩÌæ98zSbõ∞0k¥z∏V\e†Êâù—*ò^±*–™ºq—û∆π…Jl{SémıÛπÒjÓ(´Y”„öMÍ÷∏µ¿Ìëì:‘%~G≈˘ÑúƒdæÃcØ∫;8mIú|:Îü∂Œ»®;ûú_¬oÌ˘wıΩ6T∫˚º	x¨4‘jÈß(Ì§º∏ß€V∏Ûˇ4âZ9WY∆P~i,g¸rﬂ#«‰à*/Óºmê3QXÚ≥»EL÷Å˜2h/ŸÜ^3£ú∫{€;Ëuä¿~µ‹rÌ$kÈô∆Uœ2f$[^7Rï‡ËYôÖ[ÔàaôŸ*KÑGE…vñtùÏ`Vù$X!Q^ÓK?~0—≥Òk3ˇ‡Œ£∆K6ÙvÖÏUÿhnEÓÇIYzÕ&»ƒÇ~/5n"æ¿Õƒ∫·≈Í´X6ñOëqŒK˜"ñ{*Ï„{|◊q69Ô•∏üÁw±<t˜À˙;à;è˙ñ√ÊÕ∆NÖŸ¯ik<ı◊%í\€Ü˝ÄW-ˆ™3VqÉ¬W-∂˙™Ex–ı'’"Ì>(Œ¿œ|˙p∑¸m°®<Õw";™[¯¨Zm7ÍÉ`yƒw jN.˝äﬂ8CKΩSØÖp;1Ì;hÅBÔá?ıÆi‚Êñøï-èq5 &»˘4‚ù$¡å{Ú?ˇ˙7y˛=xß>⁄<ä∑ì∂H„?ÙùIcKU‘Ó”ÎÊ=9mˇQ'[◊sP±¨.ı'¥¿Âá…ÎÇu67±(π˙Ç◊ UL©ÄµgjB&`f‚îiÕ•∞rZ8*±õ…;Orﬁ¬•áL„1u|oµ9T”ùÃuÌjÔq”á‚ÀÔ|@ì•©âÕ˘»MÀ8 ~|KŒó‘âe∑Ã‰Îè≤r¯l∑rÆ§‹‘õÒÊRGÅ…ã˙i9tFß§eî,Ëå[Ã¸≈œpN%Ÿ‘À_üW«Û´ÙÓˇ˙k¥BÂf';Ï•≈¬›O'˙‡ízj¨–T-±^˛ŸJ, ás5¢Œéizp∑b≠&ßıŸ&9Øóù„Gˆ÷<âJy3gÔäWWé˙÷\o•Gè#Hâ5†+ázîØÅ Ø≈§u©¸ÉñèÀüAÕ_ÀÂ„>sY¶ÈµÅ™ôTY_bCàµÏ¢‘Å.eèT–?π‚œyÃÙ]*_õ(≥√2#L¿l6ËxèR‰yn7_±ÜÎWxm	Æº/ =û≈ÃßsK„óxWë%N3[ÔKoŸR¸Â∑lâ˛s%~ôó€∫W%‡¢◊˙Ç]R1≠yƒ:ıy9$Ø|‚≠6Ö~ãM-ke«R◊à¥£ÛÎôv+$Ω≈≤˘√ÌRv?‡ée•CÓ´H(˚=≥≠≥Ú—∫V>Ú∂ŸsÔrTïµV˙÷[∂‘˝ˆ[∂¨$ªıæ˝∂—w÷ˆsÚçﬁFû$.~È)y9Eˆˇáª;˜œ˛  ˇˇ O$Lﬁ
+        writer.write("Total Pengeluaran Mutasi Kas:\t${formatRupiah(totalMutationOut)}\n\n")
+        
+        writer.write("HISTORI TRANSAKSI GABUNGAN\n")
+        writer.write("Tanggal\tJenis Transaksi\tDeskripsi/Keterangan\tNominal Kas\n")
+        
+        combinedList.forEach { item ->
+            val nomStr = if (item.nominal >= 0) "+${formatRupiah(item.nominal)}" else "-${formatRupiah(-item.nominal)}"
+            writer.write("${item.tanggal}\t${item.jenis}\t${item.deskripsi}\t$nomStr\n")
+        }
+        writer.flush()
+    }
+    
+    if (uri != null) {
+        onExportSuccess(fileName, uri, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    } else {
+        Toast.makeText(context, "Gagal mengekspor Excel", Toast.LENGTH_SHORT).show()
+    }
+}

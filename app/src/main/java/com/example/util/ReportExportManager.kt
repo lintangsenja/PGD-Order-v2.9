@@ -81,7 +81,7 @@ object ReportExportManager {
         orders: List<TransaksiOrderMasuk>,
         mutations: List<MutasiManualKeluarMasuk>
     ): List<AllocationComparisonItem> {
-        val lunasOrders = orders.filter { it.status.equals("Lunas", ignoreCase = true) }
+        val ordersWithPayment = orders.filter { it.effectiveJumlahDibayar > 0.0 }
         
         val kertasHpp = accounts.find { it.namaAkun.contains("Kertas", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 106.0
         val tintaHpp = accounts.find { it.namaAkun.contains("Tinta", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 25.0
@@ -94,24 +94,25 @@ object ReportExportManager {
         return accounts.map { account ->
             val name = account.namaAkun
             val masukPlotting = when {
-                name.contains("Kertas", ignoreCase = true) -> lunasOrders.sumOf { it.qtyOrder.toDouble() * kertasHpp }
-                name.contains("Tinta", ignoreCase = true) -> lunasOrders.sumOf { it.qtyOrder.toDouble() * tintaHpp }
-                name.contains("Pengemasan", ignoreCase = true) -> lunasOrders.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp }
-                name.contains("Waste", ignoreCase = true) -> lunasOrders.sumOf { wastePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                name.contains("Tenaga Kerja", ignoreCase = true) -> lunasOrders.sumOf { tenagaKerjaPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                name.contains("Listrik", ignoreCase = true) -> lunasOrders.sumOf { listrikPct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                name.contains("Maintenance", ignoreCase = true) -> lunasOrders.sumOf { maintenancePct * (it.qtyOrder.toDouble() * it.hargaSatuan) }
-                name.contains("Laba", ignoreCase = true) -> lunasOrders.sumOf { order ->
-                    val totalPendapatan = order.qtyOrder.toDouble() * order.hargaSatuan
-                    val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp
-                    val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp
-                    val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
-                    val alokasiWasteVal = wastePct * totalPendapatan
-                    val alokasiTenagaKerjaVal = tenagaKerjaPct * totalPendapatan
-                    val alokasiListrikVal = listrikPct * totalPendapatan
-                    val alokasiMaintenanceVal = maintenancePct * totalPendapatan
+                name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
+                name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
+                name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
+                name.contains("Waste", ignoreCase = true) -> ordersWithPayment.sumOf { wastePct * it.effectiveJumlahDibayar }
+                name.contains("Tenaga Kerja", ignoreCase = true) -> ordersWithPayment.sumOf { tenagaKerjaPct * it.effectiveJumlahDibayar }
+                name.contains("Listrik", ignoreCase = true) -> ordersWithPayment.sumOf { listrikPct * it.effectiveJumlahDibayar }
+                name.contains("Maintenance", ignoreCase = true) -> ordersWithPayment.sumOf { maintenancePct * it.effectiveJumlahDibayar }
+                name.contains("Laba", ignoreCase = true) -> ordersWithPayment.sumOf { order ->
+                    val paid = order.effectiveJumlahDibayar
+                    val ratio = order.paymentRatio
+                    val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp * ratio
+                    val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp * ratio
+                    val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * ratio
+                    val alokasiWasteVal = wastePct * paid
+                    val alokasiTenagaKerjaVal = tenagaKerjaPct * paid
+                    val alokasiListrikVal = listrikPct * paid
+                    val alokasiMaintenanceVal = maintenancePct * paid
                     val totalModalDasar = alokasiKertasVal + alokasiTintaVal + alokasiPengemasanVal + alokasiWasteVal + alokasiTenagaKerjaVal + alokasiListrikVal + alokasiMaintenanceVal
-                    totalPendapatan - totalModalDasar
+                    paid - totalModalDasar
                 }
                 else -> 0.0
             }

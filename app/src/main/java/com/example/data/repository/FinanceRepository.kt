@@ -9,6 +9,9 @@ import com.example.data.model.TransaksiOrderMasuk
 import com.example.data.model.MasterPelanggan
 import com.example.data.model.MasterSatuanHarga
 import com.example.data.model.CustomerFrequency
+import com.example.data.model.InventarisBahanBaku
+import com.example.data.model.TransaksiBelanjaInventaris
+import com.example.data.model.RiwayatPemakaianBahan
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +35,9 @@ class FinanceRepository(
     val allMutations: Flow<List<MutasiManualKeluarMasuk>> = financeDao.getAllMutationsFlow()
     val allPelanggan: Flow<List<MasterPelanggan>> = financeDao.getAllPelangganFlow()
     val allSatuanHarga: Flow<List<MasterSatuanHarga>> = financeDao.getAllSatuanHargaFlow()
+    val allInventaris: Flow<List<InventarisBahanBaku>> = financeDao.getAllInventarisFlow()
+    val allBelanjaInventaris: Flow<List<TransaksiBelanjaInventaris>> = financeDao.getAllBelanjaInventarisFlow()
+    val allPemakaianBahan: Flow<List<RiwayatPemakaianBahan>> = financeDao.getAllPemakaianBahanFlow()
 
     fun getOrdersByDateRangeFlow(startDate: String, endDate: String): Flow<List<TransaksiOrderMasuk>> {
         return financeDao.getOrdersByDateRangeFlow(startDate, endDate)
@@ -243,6 +249,39 @@ class FinanceRepository(
 
     suspend fun deleteSatuanHarga(satuanHarga: MasterSatuanHarga) {
         financeDao.deleteSatuanHarga(satuanHarga)
+    }
+
+    // Inventaris & Aset Bahan Baku
+    suspend fun insertInventaris(item: InventarisBahanBaku): Long {
+        return financeDao.insertInventaris(item)
+    }
+
+    suspend fun updateInventaris(item: InventarisBahanBaku) {
+        financeDao.updateInventaris(item)
+    }
+
+    suspend fun deleteInventaris(item: InventarisBahanBaku) {
+        financeDao.deleteInventaris(item)
+    }
+
+    suspend fun cleanSampleInventaris() {
+        financeDao.cleanSampleInventaris()
+    }
+
+    suspend fun insertBelanjaInventaris(item: TransaksiBelanjaInventaris): Long {
+        return financeDao.insertBelanjaInventaris(item)
+    }
+
+    suspend fun deleteBelanjaInventaris(item: TransaksiBelanjaInventaris) {
+        financeDao.deleteBelanjaInventaris(item)
+    }
+
+    suspend fun insertPemakaianBahan(item: RiwayatPemakaianBahan): Long {
+        return financeDao.insertPemakaianBahan(item)
+    }
+
+    suspend fun deletePemakaianBahan(item: RiwayatPemakaianBahan) {
+        financeDao.deletePemakaianBahan(item)
     }
 
     suspend fun syncAllToCloud() {

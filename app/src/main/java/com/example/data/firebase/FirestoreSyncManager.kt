@@ -237,6 +237,9 @@ class FirestoreSyncManager(
                                         val jumlahPlastik = (doc.getLong("jumlahPlastikPengemasan") ?: 0L).toInt()
                                         val status = doc.getString("status") ?: "Belum Lunas"
                                         val kategori = doc.getString("kategori") ?: doc.getString("type") ?: "Umum"
+                                        val totalPendapatan = qtyOrder.toDouble() * hargaSatuan
+                                        val jumlahDibayar = doc.getDouble("jumlahDibayar") ?: if (status.equals("Lunas", ignoreCase = true)) totalPendapatan else 0.0
+                                        val metodePembayaran = doc.getString("metodePembayaran") ?: if (status.equals("Lunas", ignoreCase = true)) "Bayar Penuh" else "Bayar Sebagian"
                                         if (idOrder > 0 && namaPesanan.isNotBlank()) {
                                             val order = TransaksiOrderMasuk(
                                                 idOrder = idOrder,
@@ -247,7 +250,9 @@ class FirestoreSyncManager(
                                                 hargaSatuan = hargaSatuan,
                                                 jumlahPlastikPengemasan = jumlahPlastik,
                                                 status = status,
-                                                kategori = kategori
+                                                kategori = kategori,
+                                                jumlahDibayar = jumlahDibayar,
+                                                metodePembayaran = metodePembayaran
                                             )
                                             dao.insertOrder(order)
                                         }
@@ -513,6 +518,9 @@ class FirestoreSyncManager(
                 "kategori" to order.kategori,
                 "type" to if (order.isNota) "nota" else "umum",
                 "totalPendapatan" to order.totalPendapatan,
+                "jumlahDibayar" to order.effectiveJumlahDibayar,
+                "metodePembayaran" to order.metodePembayaran,
+                "sisaKekurangan" to order.sisaKekurangan,
                 "updatedAt" to System.currentTimeMillis()
             )
 
@@ -994,6 +1002,32 @@ class FirestoreSyncManager(
             Log.i("FirestoreSyncManager", "Profile synced to dual cloud successfully: $adminName")
         } catch (e: Throwable) {
             Log.i("FirestoreSyncManager", "Error syncing profile to cloud: ${e.message}")
+        }
+    }
+
+    fun cleanSampleInventarisFromCloud() {
+        if (!isFirebaseInitialized()) return
+        try {
+            val sampleNames = listOf(
+                "Kertas HVS A4 70gr SiDU", "Kertas HVS F4 70gr SiDU", "Kertas Art Paper 260gr A3+",
+                "Tinta Epson 003 Black", "Tinta Epson 003 CMY (1 Set)", "Plastik OPP Bening 25x35",
+                "Kardus Packing Sedang"
+            )
+            firestore?.collection("inventaris_bahan_baku")?.get()?.addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    val nama = doc.getString("namaBarang") ?: ""
+                    if (sampleNames.contains(nama) || nama.contains("HVS", ignoreCase = true) || nama.contains("Art Paper", ignoreCase = true)) {
+                        doc.reference.delete()
+                    }
+                }
+            }
+            realtimeDb?.let { rtdb ->
+                for (id in 1..7) {
+                    rtdb.getReference("inventaris_bahan_baku").child(id.toString()).removeValue()
+                }
+            }
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Clean sample cloud notice: ${e.message}")
         }
     }
 }
