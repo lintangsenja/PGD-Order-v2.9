@@ -3,10 +3,13 @@ package com.example.data.firebase
 import android.content.Context
 import android.util.Log
 import com.example.data.dao.FinanceDao
+import com.example.data.model.InventarisBahanBaku
 import com.example.data.model.MasterAkunSaldo
-import com.example.data.model.MutasiManualKeluarMasuk
-import com.example.data.model.TransaksiOrderMasuk
 import com.example.data.model.MasterPelanggan
+import com.example.data.model.MutasiManualKeluarMasuk
+import com.example.data.model.RiwayatPemakaianBahan
+import com.example.data.model.TransaksiBelanjaInventaris
+import com.example.data.model.TransaksiOrderMasuk
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.database.DataSnapshot
@@ -60,6 +63,16 @@ class FirestoreSyncManager(
         const val APPLICATION_ID = "1:898304484157:android:eda841c638ddcf49475b54"
         const val API_KEY = "AIzaSyBl-dcCQTGUxDeAvEBOgnssxN7IWyBTIjs"
         const val STORAGE_BUCKET = "pgdorder.firebasestorage.app"
+
+        // Struktur Koleksi Khusus Modul Inventaris & Aset Bahan Baku (Firestore)
+        const val COLLECTION_INVENTARIS_BAHAN_BAKU = "inventaris_bahan_baku"
+        const val COLLECTION_RIWAYAT_BELANJA_INVENTARIS = "riwayat_belanja_inventaris"
+        const val COLLECTION_RIWAYAT_PEMAKAIAN_BAHAN = "riwayat_pemakaian_bahan"
+
+        // Struktur Node Path Khusus Modul Inventaris & Aset Bahan Baku (Realtime Database)
+        const val RTDB_PATH_INVENTARIS_BAHAN_BAKU = "inventaris_bahan_baku"
+        const val RTDB_PATH_RIWAYAT_BELANJA_INVENTARIS = "riwayat_belanja_inventaris"
+        const val RTDB_PATH_RIWAYAT_PEMAKAIAN_BAHAN = "riwayat_pemakaian_bahan"
     }
 
     fun updateLastSyncTime() {
@@ -449,7 +462,147 @@ class FirestoreSyncManager(
                 Log.i("FirestoreSyncManager", "Customers listener setup notice: ${e.message}")
             }
 
-            // 5. Listen to App Profile ('app_profile/current_profile')
+            // 5. Listen to Inventaris & Aset Bahan Baku ('inventaris_bahan_baku')
+            try {
+                val regInv = db.collection(COLLECTION_INVENTARIS_BAHAN_BAKU).addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    _isCloudOnline.value = true
+                    scope.launch(Dispatchers.IO) {
+                        for (dc in snapshot.documentChanges) {
+                            try {
+                                val doc = dc.document
+                                val idBarang = (doc.getLong("idBarang") ?: doc.id.toLongOrNull() ?: 0L).toInt()
+                                when (dc.type) {
+                                    DocumentChange.Type.REMOVED -> {
+                                        if (idBarang > 0) {
+                                            dao.deleteInventarisById(idBarang)
+                                        }
+                                    }
+                                    DocumentChange.Type.ADDED,
+                                    DocumentChange.Type.MODIFIED -> {
+                                        val namaBarang = doc.getString("namaBarang") ?: ""
+                                        if (idBarang > 0 && namaBarang.isNotBlank()) {
+                                            val item = InventarisBahanBaku(
+                                                idBarang = idBarang,
+                                                namaBarang = namaBarang,
+                                                kategori = doc.getString("kategori") ?: "Operasional & Lainnya",
+                                                stokUtuh = doc.getDouble("stokUtuh") ?: (doc.getLong("stokUtuh")?.toDouble() ?: 0.0),
+                                                satuanUtuh = doc.getString("satuanUtuh") ?: "Pcs",
+                                                hargaSatuanUtuh = doc.getDouble("hargaSatuanUtuh") ?: (doc.getLong("hargaSatuanUtuh")?.toDouble() ?: 0.0),
+                                                persentaseKondisi = (doc.getLong("persentaseKondisi") ?: 100L).toInt(),
+                                                catatan = doc.getString("catatan") ?: "",
+                                                updatedAt = doc.getString("updatedAt") ?: ""
+                                            )
+                                            dao.insertInventaris(item)
+                                        }
+                                    }
+                                }
+                            } catch (e: Throwable) {
+                                Log.i("FirestoreSyncManager", "Error parsing remote inventaris doc: ${e.message}")
+                            }
+                        }
+                    }
+                }
+                listeners.add(regInv)
+            } catch (e: Throwable) {
+                Log.i("FirestoreSyncManager", "Inventaris listener setup notice: ${e.message}")
+            }
+
+            // 6. Listen to Riwayat Belanja Inventaris ('riwayat_belanja_inventaris')
+            try {
+                val regBelanja = db.collection(COLLECTION_RIWAYAT_BELANJA_INVENTARIS).addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    _isCloudOnline.value = true
+                    scope.launch(Dispatchers.IO) {
+                        for (dc in snapshot.documentChanges) {
+                            try {
+                                val doc = dc.document
+                                val idBelanja = (doc.getLong("idBelanja") ?: doc.id.toLongOrNull() ?: 0L).toInt()
+                                when (dc.type) {
+                                    DocumentChange.Type.REMOVED -> {
+                                        if (idBelanja > 0) {
+                                            dao.deleteBelanjaInventarisById(idBelanja)
+                                        }
+                                    }
+                                    DocumentChange.Type.ADDED,
+                                    DocumentChange.Type.MODIFIED -> {
+                                        val namaBarang = doc.getString("namaBarang") ?: ""
+                                        val tanggal = doc.getString("tanggal") ?: ""
+                                        if (idBelanja > 0 && namaBarang.isNotBlank()) {
+                                            val belanja = TransaksiBelanjaInventaris(
+                                                idBelanja = idBelanja,
+                                                tanggal = tanggal,
+                                                idAkunKas = (doc.getLong("idAkunKas") ?: 1L).toInt(),
+                                                namaAkunKas = doc.getString("namaAkunKas") ?: "Dompet Kas",
+                                                uangKeluarDompet = doc.getDouble("uangKeluarDompet") ?: (doc.getLong("uangKeluarDompet")?.toDouble() ?: 0.0),
+                                                realisasiNotaToko = doc.getDouble("realisasiNotaToko") ?: (doc.getLong("realisasiNotaToko")?.toDouble() ?: 0.0),
+                                                selisihUang = doc.getDouble("selisihUang") ?: (doc.getLong("selisihUang")?.toDouble() ?: 0.0),
+                                                catatanSelisih = doc.getString("catatanSelisih") ?: "",
+                                                idBarangTerkait = doc.getLong("idBarangTerkait")?.toInt(),
+                                                namaBarang = namaBarang,
+                                                jumlahTambahStok = doc.getDouble("jumlahTambahStok") ?: (doc.getLong("jumlahTambahStok")?.toDouble() ?: 0.0),
+                                                satuan = doc.getString("satuan") ?: "Rim",
+                                                potongKasOtomatis = doc.getBoolean("potongKasOtomatis") ?: true
+                                            )
+                                            dao.insertBelanjaInventaris(belanja)
+                                        }
+                                    }
+                                }
+                            } catch (e: Throwable) {
+                                Log.i("FirestoreSyncManager", "Error parsing remote belanja doc: ${e.message}")
+                            }
+                        }
+                    }
+                }
+                listeners.add(regBelanja)
+            } catch (e: Throwable) {
+                Log.i("FirestoreSyncManager", "Belanja listener setup notice: ${e.message}")
+            }
+
+            // 6b. Listen to Riwayat Pemakaian Bahan ('riwayat_pemakaian_bahan')
+            try {
+                val regPemakaian = db.collection(COLLECTION_RIWAYAT_PEMAKAIAN_BAHAN).addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    _isCloudOnline.value = true
+                    scope.launch(Dispatchers.IO) {
+                        for (dc in snapshot.documentChanges) {
+                            val doc = dc.document
+                            val idPemakaian = (doc.getLong("idPemakaian") ?: doc.id.toLongOrNull() ?: 0L).toInt()
+                            try {
+                                when (dc.type) {
+                                    DocumentChange.Type.REMOVED -> {
+                                        dao.deletePemakaianBahanById(idPemakaian)
+                                    }
+                                    DocumentChange.Type.ADDED,
+                                    DocumentChange.Type.MODIFIED -> {
+                                        val namaBarang = doc.getString("namaBarang") ?: ""
+                                        val tanggal = doc.getString("tanggal") ?: ""
+                                        if (idPemakaian > 0 && namaBarang.isNotBlank()) {
+                                            val pemakaian = RiwayatPemakaianBahan(
+                                                idPemakaian = idPemakaian,
+                                                tanggal = tanggal,
+                                                idBarang = (doc.getLong("idBarang") ?: 0L).toInt(),
+                                                namaBarang = namaBarang,
+                                                jenisKoreksi = doc.getString("jenisKoreksi") ?: "Pemakaian",
+                                                nilaiPerubahan = doc.getString("nilaiPerubahan") ?: "",
+                                                keterangan = doc.getString("keterangan") ?: ""
+                                            )
+                                            dao.insertPemakaianBahan(pemakaian)
+                                        }
+                                    }
+                                }
+                            } catch (e: Throwable) {
+                                Log.i("FirestoreSyncManager", "Error parsing remote pemakaian doc: ${e.message}")
+                            }
+                        }
+                    }
+                }
+                listeners.add(regPemakaian)
+            } catch (e: Throwable) {
+                Log.i("FirestoreSyncManager", "Pemakaian listener setup notice: ${e.message}")
+            }
+
+            // 7. Listen to App Profile ('app_profile/current_profile')
             try {
                 val regProfile = db.collection("app_profile").document("current_profile")
                     .addSnapshotListener { snapshot, error ->
@@ -918,6 +1071,230 @@ class FirestoreSyncManager(
         }
     }
 
+    // ==========================================
+    // INVENTARIS & ASET BAHAN BAKU SYNC
+    // ==========================================
+
+    suspend fun syncInventarisToCloud(item: InventarisBahanBaku) {
+        if (!isFirebaseInitialized()) return
+
+        try {
+            val docData = hashMapOf(
+                "idBarang" to item.idBarang,
+                "namaBarang" to item.namaBarang,
+                "kategori" to item.kategori,
+                "stokUtuh" to item.stokUtuh,
+                "satuanUtuh" to item.satuanUtuh,
+                "hargaSatuanUtuh" to item.hargaSatuanUtuh,
+                "persentaseKondisi" to item.persentaseKondisi,
+                "catatan" to item.catatan,
+                "updatedAt" to item.updatedAt,
+                "cloudTimestamp" to System.currentTimeMillis()
+            )
+            val docId = if (item.idBarang > 0) item.idBarang.toString() else System.currentTimeMillis().toString()
+
+            // 1. Write to Firestore koleksi "inventaris_bahan_baku"
+            firestore?.let { db ->
+                try {
+                    db.collection(COLLECTION_INVENTARIS_BAHAN_BAKU).document(docId).set(docData, SetOptions.merge()).await()
+                } catch (e: Throwable) {
+                    Log.i("FirestoreSyncManager", "Firestore sync inventaris notice: ${e.message}")
+                }
+            }
+
+            // 2. Write to Realtime Database node "/inventaris_bahan_baku"
+            realtimeDb?.let { rtdb ->
+                try {
+                    rtdb.getReference(RTDB_PATH_INVENTARIS_BAHAN_BAKU).child(docId).setValue(docData).await()
+                } catch (e: Throwable) {
+                    Log.i("FirestoreSyncManager", "RTDB sync inventaris notice: ${e.message}")
+                }
+            }
+
+            _isCloudOnline.value = true
+            updateLastSyncTime()
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Dual cloud sync inventaris notice: ${e.message}")
+        }
+    }
+
+    suspend fun deleteInventarisFromCloud(idBarang: Int) {
+        if (!isFirebaseInitialized()) return
+
+        try {
+            val docId = idBarang.toString()
+
+            // 1. Delete from Firestore
+            firestore?.let { db ->
+                try {
+                    db.collection(COLLECTION_INVENTARIS_BAHAN_BAKU).document(docId).delete().await()
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Delete from Realtime Database
+            realtimeDb?.let { rtdb ->
+                try {
+                    rtdb.getReference(RTDB_PATH_INVENTARIS_BAHAN_BAKU).child(docId).removeValue().await()
+                } catch (_: Throwable) {}
+            }
+
+            _isCloudOnline.value = true
+            updateLastSyncTime()
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Dual cloud delete inventaris notice: ${e.message}")
+        }
+    }
+
+    // ==========================================
+    // RIWAYAT BELANJA INVENTARIS SYNC
+    // ==========================================
+
+    suspend fun syncBelanjaInventarisToCloud(item: TransaksiBelanjaInventaris) {
+        if (!isFirebaseInitialized()) return
+
+        try {
+            val docData = hashMapOf(
+                "idBelanja" to item.idBelanja,
+                "tanggal" to item.tanggal,
+                "idAkunKas" to item.idAkunKas,
+                "namaAkunKas" to item.namaAkunKas,
+                "uangKeluarDompet" to item.uangKeluarDompet,
+                "realisasiNotaToko" to item.realisasiNotaToko,
+                "selisihUang" to item.selisihUang,
+                "catatanSelisih" to item.catatanSelisih,
+                "idBarangTerkait" to (item.idBarangTerkait ?: 0),
+                "namaBarang" to item.namaBarang,
+                "jumlahTambahStok" to item.jumlahTambahStok,
+                "satuan" to item.satuan,
+                "potongKasOtomatis" to item.potongKasOtomatis,
+                "cloudTimestamp" to System.currentTimeMillis()
+            )
+            val docId = if (item.idBelanja > 0) item.idBelanja.toString() else System.currentTimeMillis().toString()
+
+            // 1. Write to Firestore koleksi "riwayat_belanja_inventaris"
+            firestore?.let { db ->
+                try {
+                    db.collection(COLLECTION_RIWAYAT_BELANJA_INVENTARIS).document(docId).set(docData, SetOptions.merge()).await()
+                } catch (e: Throwable) {
+                    Log.i("FirestoreSyncManager", "Firestore sync belanja notice: ${e.message}")
+                }
+            }
+
+            // 2. Write to Realtime Database node "/riwayat_belanja_inventaris"
+            realtimeDb?.let { rtdb ->
+                try {
+                    rtdb.getReference(RTDB_PATH_RIWAYAT_BELANJA_INVENTARIS).child(docId).setValue(docData).await()
+                } catch (e: Throwable) {
+                    Log.i("FirestoreSyncManager", "RTDB sync belanja notice: ${e.message}")
+                }
+            }
+
+            _isCloudOnline.value = true
+            updateLastSyncTime()
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Dual cloud sync belanja notice: ${e.message}")
+        }
+    }
+
+    suspend fun deleteBelanjaInventarisFromCloud(idBelanja: Int) {
+        if (!isFirebaseInitialized()) return
+
+        try {
+            val docId = idBelanja.toString()
+
+            // 1. Delete from Firestore
+            firestore?.let { db ->
+                try {
+                    db.collection(COLLECTION_RIWAYAT_BELANJA_INVENTARIS).document(docId).delete().await()
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Delete from Realtime Database
+            realtimeDb?.let { rtdb ->
+                try {
+                    rtdb.getReference(RTDB_PATH_RIWAYAT_BELANJA_INVENTARIS).child(docId).removeValue().await()
+                } catch (_: Throwable) {}
+            }
+
+            _isCloudOnline.value = true
+            updateLastSyncTime()
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Dual cloud delete belanja notice: ${e.message}")
+        }
+    }
+
+    // ==========================================
+    // RIWAYAT PEMAKAIAN BAHAN SYNC
+    // ==========================================
+
+    suspend fun syncPemakaianBahanToCloud(item: RiwayatPemakaianBahan) {
+        if (!isFirebaseInitialized()) return
+
+        try {
+            val docData = hashMapOf(
+                "idPemakaian" to item.idPemakaian,
+                "tanggal" to item.tanggal,
+                "idBarang" to item.idBarang,
+                "namaBarang" to item.namaBarang,
+                "jenisKoreksi" to item.jenisKoreksi,
+                "nilaiPerubahan" to item.nilaiPerubahan,
+                "keterangan" to item.keterangan,
+                "cloudTimestamp" to System.currentTimeMillis()
+            )
+            val docId = if (item.idPemakaian > 0) item.idPemakaian.toString() else System.currentTimeMillis().toString()
+
+            // 1. Write to Firestore koleksi "riwayat_pemakaian_bahan"
+            firestore?.let { db ->
+                try {
+                    db.collection(COLLECTION_RIWAYAT_PEMAKAIAN_BAHAN).document(docId).set(docData, SetOptions.merge()).await()
+                } catch (e: Throwable) {
+                    Log.i("FirestoreSyncManager", "Firestore sync pemakaian notice: ${e.message}")
+                }
+            }
+
+            // 2. Write to Realtime Database node "/riwayat_pemakaian_bahan"
+            realtimeDb?.let { rtdb ->
+                try {
+                    rtdb.getReference(RTDB_PATH_RIWAYAT_PEMAKAIAN_BAHAN).child(docId).setValue(docData).await()
+                } catch (e: Throwable) {
+                    Log.i("FirestoreSyncManager", "RTDB sync pemakaian notice: ${e.message}")
+                }
+            }
+
+            _isCloudOnline.value = true
+            updateLastSyncTime()
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Dual cloud sync pemakaian notice: ${e.message}")
+        }
+    }
+
+    suspend fun deletePemakaianBahanFromCloud(idPemakaian: Int) {
+        if (!isFirebaseInitialized()) return
+
+        try {
+            val docId = idPemakaian.toString()
+
+            // 1. Delete from Firestore
+            firestore?.let { db ->
+                try {
+                    db.collection(COLLECTION_RIWAYAT_PEMAKAIAN_BAHAN).document(docId).delete().await()
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Delete from Realtime Database
+            realtimeDb?.let { rtdb ->
+                try {
+                    rtdb.getReference(RTDB_PATH_RIWAYAT_PEMAKAIAN_BAHAN).child(docId).removeValue().await()
+                } catch (_: Throwable) {}
+            }
+
+            _isCloudOnline.value = true
+            updateLastSyncTime()
+        } catch (e: Throwable) {
+            Log.i("FirestoreSyncManager", "Dual cloud delete pemakaian notice: ${e.message}")
+        }
+    }
+
     suspend fun syncAllToCloud() {
         if (!isFirebaseInitialized()) return
 
@@ -942,6 +1319,18 @@ class FirestoreSyncManager(
             val customers = dao.getAllPelangganDirect()
             for (customer in customers) {
                 syncCustomerToCloud(customer)
+            }
+
+            // Sync Inventaris & Aset Bahan Baku
+            val inventarisList = dao.getAllInventarisDirect()
+            for (item in inventarisList) {
+                syncInventarisToCloud(item)
+            }
+
+            // Sync Riwayat Belanja Inventaris
+            val belanjaList = dao.getAllBelanjaInventarisDirect()
+            for (item in belanjaList) {
+                syncBelanjaInventarisToCloud(item)
             }
 
             updateLastSyncTime()

@@ -11,19 +11,19 @@ data class RiwayatPemakaianBahan(
     val idPemakaian: Int = 0,
 
     @ColumnInfo(name = "tanggal")
-    val tanggal: String,
+    val tanggal: String = "",
 
     @ColumnInfo(name = "id_barang")
-    val idBarang: Int,
+    val idBarang: Int = 0,
 
     @ColumnInfo(name = "nama_barang")
-    val namaBarang: String,
+    val namaBarang: String = "",
 
     @ColumnInfo(name = "jenis_koreksi")
-    val jenisKoreksi: String, // "Kurangi Satuan Utuh", "Ubah Persentase", "Tambah Stok Fisik"
+    val jenisKoreksi: String = "Pemakaian", // "Kurangi Satuan Utuh", "Ubah Persentase", "Tambah Stok Fisik"
 
     @ColumnInfo(name = "nilai_perubahan")
-    val nilaiPerubahan: String, // misal "-2 Rim", "100% -> 50%", "+5 Botol"
+    val nilaiPerubahan: String = "", // misal "-2 Rim", "100% -> 50%", "+5 Botol"
 
     @ColumnInfo(name = "keterangan")
     val keterangan: String = ""

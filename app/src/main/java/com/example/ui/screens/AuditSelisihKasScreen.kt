@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.MasterAkunSaldo
+import com.example.data.model.MutasiManualKeluarMasuk
 import com.example.ui.viewmodel.AccountDashboardRow
 import com.example.ui.viewmodel.DashboardSummary
 import com.example.ui.viewmodel.FinanceViewModel
@@ -59,8 +61,43 @@ data class AuditRecord(
     val selisih: Double,
     val isAdjusted: Boolean,
     val keterangan: String = "",
-    val detailPenyesuaian: String = ""
+    val detailPenyesuaian: String = "",
+    val adjustmentsJson: String = "[]"
 )
+
+fun serializeAdjustments(items: List<Triple<Int, String, Double>>): String {
+    val arr = JSONArray()
+    for ((idAkun, name, delta) in items) {
+        val obj = JSONObject().apply {
+            put("idAkun", idAkun)
+            put("namaAkun", name)
+            put("delta", delta)
+        }
+        arr.put(obj)
+    }
+    return arr.toString()
+}
+
+fun parseAdjustmentsJson(json: String): List<Triple<Int, String, Double>> {
+    val list = mutableListOf<Triple<Int, String, Double>>()
+    if (json.isBlank() || json == "[]") return list
+    try {
+        val arr = JSONArray(json)
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            list.add(
+                Triple(
+                    obj.getInt("idAkun"),
+                    obj.optString("namaAkun", ""),
+                    obj.getDouble("delta")
+                )
+            )
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return list
+}
 
 object AuditStorageHelper {
     private const val PREF_NAME = "pgd_audit_cash_prefs"
@@ -83,7 +120,8 @@ object AuditStorageHelper {
                         selisih = obj.optDouble("selisih", 0.0),
                         isAdjusted = obj.optBoolean("isAdjusted", false),
                         keterangan = obj.optString("keterangan", ""),
-                        detailPenyesuaian = obj.optString("detailPenyesuaian", "")
+                        detailPenyesuaian = obj.optString("detailPenyesuaian", ""),
+                        adjustmentsJson = obj.optString("adjustmentsJson", "[]")
                     )
                 )
             }
@@ -95,9 +133,31 @@ object AuditStorageHelper {
 
     fun saveAuditRecord(context: Context, record: AuditRecord) {
         val currentList = loadAuditHistory(context).toMutableList()
+        currentList.removeAll { it.id == record.id }
         currentList.add(0, record)
+        persistAuditList(context, currentList)
+    }
+
+    fun updateAuditRecord(context: Context, record: AuditRecord) {
+        val currentList = loadAuditHistory(context).toMutableList()
+        val index = currentList.indexOfFirst { it.id == record.id }
+        if (index != -1) {
+            currentList[index] = record
+        } else {
+            currentList.add(0, record)
+        }
+        persistAuditList(context, currentList)
+    }
+
+    fun deleteAuditRecord(context: Context, auditId: String) {
+        val currentList = loadAuditHistory(context).toMutableList()
+        currentList.removeAll { it.id == auditId }
+        persistAuditList(context, currentList)
+    }
+
+    private fun persistAuditList(context: Context, list: List<AuditRecord>) {
         val arr = JSONArray()
-        for (item in currentList.take(50)) { // Keep last 50 records
+        for (item in list.take(50)) { // Keep last 50 records
             val obj = JSONObject().apply {
                 put("id", item.id)
                 put("timestamp", item.timestamp)
@@ -107,6 +167,7 @@ object AuditStorageHelper {
                 put("isAdjusted", item.isAdjusted)
                 put("keterangan", item.keterangan)
                 put("detailPenyesuaian", item.detailPenyesuaian)
+                put("adjustmentsJson", item.adjustmentsJson)
             }
             arr.put(obj)
         }
@@ -195,6 +256,12 @@ fun getPosVisualTheme(rawName: String): PosVisualTheme {
             bgPastel = Color(0xFFE0F2F1),
             borderAccent = Color(0xFF80CBC4)
         )
+        clean.contains("me gps") || clean.contains("gps") -> PosVisualTheme(
+            icon = Icons.Default.GpsFixed,
+            iconTint = Color(0xFF5E35B1),
+            bgPastel = Color(0xFFEDE7F6),
+            borderAccent = Color(0xFFD1C4E9)
+        )
         else -> PosVisualTheme(
             icon = Icons.Default.AccountBalanceWallet,
             iconTint = Color(0xFF6A4C93),
@@ -204,6 +271,60 @@ fun getPosVisualTheme(rawName: String): PosVisualTheme {
     }
 }
 
+/**
+ * Kotak informasi Saldo Saat Ini untuk kartu dompet kas
+ * Selaras dengan AccountBalanceBadge pada menu Mutasi Dompet
+ */
+@Composable
+fun AuditAccountBalanceBadge(
+    label: String,
+    balance: Double,
+    tintColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val isNegative = balance < 0
+    Surface(
+        color = tintColor.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, tintColor.copy(alpha = 0.25f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountBalanceWallet,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = tintColor
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFF4A3B66),
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = formatAuditRupiah(balance),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isNegative) Color(0xFFDC2626) else tintColor
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AuditSelisihKasScreen(
     viewModel: FinanceViewModel,
@@ -234,6 +355,8 @@ fun AuditSelisihKasScreen(
 
     // Load audit history
     var auditHistory by remember { mutableStateOf(AuditStorageHelper.loadAuditHistory(context)) }
+    var deletingRecord by remember { mutableStateOf<AuditRecord?>(null) }
+    var editingRecord by remember { mutableStateOf<AuditRecord?>(null) }
 
     // Calculations
     val liveSystemBalance = actualSummary.grandTotalSisaRiil
@@ -1002,7 +1125,80 @@ fun AuditSelisihKasScreen(
                 }
 
                 // ==========================================
-                // REDESIGNED POS CARDS (MATCHING ANALISIS POS UI)
+                // STICKY HEADER INDIKATOR SISA ALOKASI
+                // ==========================================
+                stickyHeader(key = "sticky_audit_allocation_header") {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isAllocationBalanced) Color(0xFFF1F8E9) else Color(0xFFFFF8E1),
+                        border = BorderStroke(1.2.dp, if (isAllocationBalanced) Color(0xFFA5D6A7) else Color(0xFFFFCC80)),
+                        shadowElevation = 3.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(
+                                            if (isAllocationBalanced) Color(0xFFC8E6C9) else Color(0xFFFFE0B2),
+                                            CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isAllocationBalanced) Icons.Default.CheckCircle else Icons.Default.Pending,
+                                        contentDescription = null,
+                                        tint = if (isAllocationBalanced) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = if (isAllocationBalanced) "Alokasi Selesai (Seimbang)" else "Sisa Belum Dialokasi:",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF554A6D),
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = formatAuditRupiah(remainingToAllocate),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (isAllocationBalanced) Color(0xFF2E7D32) else Color(0xFFD32F2F)
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                color = if (isAllocationBalanced) Color(0xFF2E7D32) else Color(0xFFF57C00),
+                                shape = RoundedCornerShape(100.dp)
+                            ) {
+                                Text(
+                                    text = if (isAllocationBalanced) "SEIMBANG (0)" else "BELUM SEIMBANG",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ==========================================
+                // REDESIGNED POS CARDS (MATCHING MANAJEMEN DOMPET & MUTASI)
                 // ==========================================
                 items(actualSummary.rows, key = { it.idAkun }) { row ->
                     val theme = getPosVisualTheme(row.namaAkun)
@@ -1020,7 +1216,7 @@ fun AuditSelisihKasScreen(
                             .fillMaxWidth()
                             .animateContentSize()
                             .testTag("audit_pos_card_${row.idAkun}"),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         border = BorderStroke(
                             width = if (currentVal.isNotBlank()) 1.6.dp else 1.dp,
@@ -1029,7 +1225,7 @@ fun AuditSelisihKasScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Header Row: Specific Pastel Circle Icon + Pos Name + Serapan Badge
@@ -1043,7 +1239,7 @@ fun AuditSelisihKasScreen(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    // Custom Pastel Icon Container
+                                    // Custom Pastel Icon Container (Manajemen Dompet Style)
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
@@ -1055,13 +1251,13 @@ fun AuditSelisihKasScreen(
                                             imageVector = theme.icon,
                                             contentDescription = row.namaAkun,
                                             tint = theme.iconTint,
-                                            modifier = Modifier.size(22.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
 
                                     Column {
                                         Text(
-                                            text = cleanPosName,
+                                            text = row.namaAkun,
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF2D1E4B)
@@ -1106,48 +1302,59 @@ fun AuditSelisihKasScreen(
                                 }
                             }
 
-                            // Balance Display Box (Saldo Riil vs Estimasi Saldo Baru)
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFFF9F7FD),
-                                border = BorderStroke(0.8.dp, Color(0xFFEAE2F7))
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = "Saldo Riil Saat Ini",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF7A6E91)
-                                        )
-                                        Text(
-                                            text = formatAuditRupiah(row.sisaSaldoRiil),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF3B2369)
-                                        )
-                                    }
+                            // Kotak Informasi Saldo Saat Ini (Tiru pola tampilan menu Mutasi Dompet)
+                            AuditAccountBalanceBadge(
+                                label = "Saldo Saat Ini (${row.namaAkun}):",
+                                balance = row.sisaSaldoRiil,
+                                tintColor = theme.iconTint
+                            )
 
-                                    if (currentVal.isNotBlank() && adjustmentAmount != 0.0) {
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                text = "Estimasi Saldo Baru",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFF7A6E91)
-                                            )
+                            // Jika ada nominal penyesuaian yang diisi, tampilkan Estimasi Saldo Baru
+                            if (currentVal.isNotBlank() && adjustmentAmount != 0.0) {
+                                Surface(
+                                    color = if (adjustmentAmount > 0) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(1.dp, if (adjustmentAmount > 0) Color(0xFFA5D6A7) else Color(0xFFEF9A9A)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (adjustmentAmount > 0) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = if (adjustmentAmount > 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                                )
+                                                Text(
+                                                    text = "Estimasi Saldo Baru:",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = Color(0xFF4A3B66),
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                             Text(
                                                 text = formatAuditRupiah(projectedNewBalance),
-                                                style = MaterialTheme.typography.bodyMedium,
+                                                style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = if (adjustmentAmount > 0) Color(0xFF2E7D32) else Color(0xFFC62828)
                                             )
                                         }
+                                        Text(
+                                            text = "Kalkulasi: ${formatAuditRupiah(row.sisaSaldoRiil)} (Saldo Murni) ${if (adjustmentAmount >= 0) "+ " else "- "}${formatAuditRupiah(kotlin.math.abs(adjustmentAmount))} (Penyesuaian) = ${formatAuditRupiah(projectedNewBalance)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFF554B6E)
+                                        )
                                     }
                                 }
                             }
@@ -1181,7 +1388,7 @@ fun AuditSelisihKasScreen(
                                     IconButton(
                                         onClick = { walletAdjustments.remove(row.idAkun) },
                                         modifier = Modifier
-                                            .size(40.dp)
+                                            .size(44.dp)
                                             .background(Color(0xFFFFEBEE), RoundedCornerShape(10.dp))
                                     ) {
                                         Icon(
@@ -1270,7 +1477,9 @@ fun AuditSelisihKasScreen(
                             }
 
                             val now = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date())
+                            val auditId = System.currentTimeMillis().toString()
                             val detailItems = mutableListOf<String>()
+                            val adjustmentTriples = mutableListOf<Triple<Int, String, Double>>()
 
                             walletAdjustments.forEach { (idAkun, amountStr) ->
                                 val delta = parseAuditDouble(amountStr) ?: 0.0
@@ -1278,29 +1487,34 @@ fun AuditSelisihKasScreen(
                                     val account = actualAccounts.find { it.idAkun == idAkun }
                                     val accountName = account?.namaAkun ?: "Akun #$idAkun"
                                     detailItems.add("$accountName: ${if (delta > 0) "+" else ""}${formatAuditRupiah(delta)}")
-                                    viewModel.insertMutation(
-                                        tanggal = viewModel.getTodayString(),
-                                        idAkun = idAkun,
-                                        jenis = if (delta > 0) "Masuk" else "Keluar",
-                                        nominal = abs(delta),
-                                        keterangan = "Audit Selisih Kas (${if (delta > 0) "Surplus" else "Defisit"}): ${auditNote.ifBlank { "Penyesuaian fisik kas mandiri" }}"
-                                    )
+                                    adjustmentTriples.add(Triple(idAkun, accountName, delta))
                                 }
                             }
 
+                            // 1. Eksekusi pembaruan saldo pos dompet secara nyata di database
+                            viewModel.applyAuditAdjustment(
+                                auditId = auditId,
+                                auditNote = auditNote,
+                                adjustments = adjustmentTriples,
+                                tanggal = viewModel.getTodayString()
+                            )
+
+                            // 2. Simpan riwayat audit berpasangan dengan detail mutasi
                             val record = AuditRecord(
+                                id = auditId,
                                 timestamp = now,
                                 saldoSistem = actualSaldoSistem,
                                 saldoFisik = actualSaldoFisik,
                                 selisih = selisih,
                                 isAdjusted = true,
                                 keterangan = auditNote.ifBlank { "Penyesuaian saldo kas fisik mandiri" },
-                                detailPenyesuaian = detailItems.joinToString(", ")
+                                detailPenyesuaian = detailItems.joinToString(", "),
+                                adjustmentsJson = serializeAdjustments(adjustmentTriples)
                             )
                             AuditStorageHelper.saveAuditRecord(context, record)
                             auditHistory = AuditStorageHelper.loadAuditHistory(context)
 
-                            Toast.makeText(context, "Penyesuaian saldo berhasil diterapkan ke dompet!", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Penyesuaian saldo berhasil diterapkan ke dompet & beranda!", Toast.LENGTH_LONG).show()
 
                             // Reset state
                             saldoFisikInput = ""
@@ -1482,6 +1696,47 @@ fun AuditSelisihKasScreen(
                                     }
                                 }
                             }
+
+                            HorizontalDivider(color = Color(0xFFF0EBF8))
+
+                            // Action buttons: Edit & Hapus/Rollback
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(
+                                    onClick = { editingRecord = record },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    border = BorderStroke(1.dp, Color(0xFF6A4C93)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF6A4C93)),
+                                    modifier = Modifier.testTag("btn_edit_audit_${record.id}")
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit Audit", modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Edit", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                OutlinedButton(
+                                    onClick = { deletingRecord = record },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFE57373)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC62828)),
+                                    modifier = Modifier.testTag("btn_hapus_audit_${record.id}")
+                                ) {
+                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Hapus Audit", modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (record.isAdjusted) "Hapus & Rollback" else "Hapus",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1503,6 +1758,575 @@ fun AuditSelisihKasScreen(
             }
         )
     }
+
+    // Confirmation Dialog Hapus & Rollback Audit
+    if (deletingRecord != null) {
+        val rec = deletingRecord!!
+        AlertDialog(
+            onDismissRequest = { deletingRecord = null },
+            shape = RoundedCornerShape(16.dp),
+            icon = {
+                Icon(
+                    Icons.Default.WarningAmber,
+                    contentDescription = null,
+                    tint = Color(0xFFC62828),
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = if (rec.isAdjusted) "Hapus & Rollback Audit Kas?" else "Hapus Riwayat Audit?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2D1E4B)
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Sesi audit: ${rec.timestamp}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF554B6E)
+                    )
+                    Text(
+                        text = "Selisih: ${if (rec.selisih > 0) "+" else ""}${formatAuditRupiah(rec.selisih)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (rec.selisih > 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                    )
+                    if (rec.isAdjusted) {
+                        Surface(
+                            color = Color(0xFFFFF3E0),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFFFFCC80)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "⚠️ Rollback Saldo Otomatis:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE65100)
+                                )
+                                Text(
+                                    text = "Mutasi penyesuaian (${rec.detailPenyesuaian}) akan dibatalkan & dihapus dari database. Saldo pos dompet dan Total Kas Fisik di Beranda akan otomatis dikembalikan (rollback) ke posisi semula secara proporsional.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF5D4037)
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "Riwayat audit evaluasi ini akan dihapus secara permanen.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF554B6E)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (rec.isAdjusted) {
+                            viewModel.rollbackAuditAdjustment(rec.id, fallbackNote = rec.keterangan)
+                        }
+                        AuditStorageHelper.deleteAuditRecord(context, rec.id)
+                        auditHistory = AuditStorageHelper.loadAuditHistory(context)
+                        deletingRecord = null
+                        Toast.makeText(
+                            context,
+                            if (rec.isAdjusted) "Riwayat audit dihapus & saldo dompet berhasil di-rollback!" else "Riwayat audit berhasil dihapus!",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("btn_confirm_hapus_audit")
+                ) {
+                    Text(if (rec.isAdjusted) "Hapus & Rollback" else "Hapus", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { deletingRecord = null },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Dialog Edit Riwayat & Penyesuaian Saldo Audit
+    if (editingRecord != null) {
+        val rec = editingRecord!!
+        val liveMutations by viewModel.allMutations.collectAsStateWithLifecycle()
+        EditAuditRecordDialog(
+            record = rec,
+            actualAccounts = actualAccounts,
+            summaryRows = actualSummary.rows,
+            allMutations = liveMutations,
+            onDismiss = { editingRecord = null },
+            onSave = { updatedRecord, adjustments ->
+                if (updatedRecord.isAdjusted) {
+                    viewModel.applyAuditAdjustment(
+                        auditId = updatedRecord.id,
+                        auditNote = updatedRecord.keterangan,
+                        adjustments = adjustments,
+                        tanggal = viewModel.getTodayString(),
+                        oldAuditNote = rec.keterangan
+                    )
+                }
+                AuditStorageHelper.updateAuditRecord(context, updatedRecord)
+                auditHistory = AuditStorageHelper.loadAuditHistory(context)
+                editingRecord = null
+                Toast.makeText(
+                    context,
+                    if (updatedRecord.isAdjusted) "Riwayat audit & penyesuaian dompet berhasil diperbarui!" else "Riwayat audit berhasil diperbarui!",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        )
+    }
+}
+
+// Dialog Edit Audit Record
+@Composable
+fun EditAuditRecordDialog(
+    record: AuditRecord,
+    actualAccounts: List<MasterAkunSaldo>,
+    summaryRows: List<AccountDashboardRow> = emptyList(),
+    allMutations: List<MutasiManualKeluarMasuk> = emptyList(),
+    onDismiss: () -> Unit,
+    onSave: (updatedRecord: AuditRecord, adjustments: List<Triple<Int, String, Double>>) -> Unit
+) {
+    var editedNote by remember { mutableStateOf(record.keterangan) }
+
+    // Parse initial adjustments
+    val initialTriples = remember(record) { parseAdjustmentsJson(record.adjustmentsJson) }
+    val editWalletAdjustments = remember {
+        mutableStateMapOf<Int, String>().apply {
+            if (initialTriples.isNotEmpty()) {
+                initialTriples.forEach { (idAkun, _, delta) ->
+                    put(idAkun, if (delta % 1.0 == 0.0) delta.toLong().toString() else delta.toString())
+                }
+            }
+        }
+    }
+
+    val totalAllocated = editWalletAdjustments.values.sumOf { parseAuditDouble(it) ?: 0.0 }
+    val remainingToAllocate = record.selisih - totalAllocated
+    val isAllocationBalanced = abs(remainingToAllocate) < 1.0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(18.dp),
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = Color(0xFF6A4C93),
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "Edit Riwayat Audit",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2D1E4B)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // FIXED / PINNED TOP SECTION: Ringkasan Sesi Audit (Tidak ikut terscroll)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFF7F3FB),
+                    border = BorderStroke(1.dp, Color(0xFFEADBFA)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Waktu Sesi: ${record.timestamp}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF6A5C80)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Saldo Fisik: ${formatAuditRupiah(record.saldoFisik)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "Selisih: ${if (record.selisih > 0) "+" else ""}${formatAuditRupiah(record.selisih)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (record.selisih > 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                            )
+                        }
+                    }
+                }
+
+                // FIXED / PINNED TOP SECTION: Status Bar Sisa Belum Dialokasi (Selalu terlihat di atas)
+                if (record.isAdjusted) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isAllocationBalanced) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                        border = BorderStroke(1.dp, if (isAllocationBalanced) Color(0xFFA5D6A7) else Color(0xFFFFCC80)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isAllocationBalanced) Icons.Default.CheckCircle else Icons.Default.Pending,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isAllocationBalanced) Color(0xFF2E7D32) else Color(0xFFE65100)
+                                )
+                                Text(
+                                    text = if (isAllocationBalanced) "✓ Alokasi Seimbang" else "Sisa Belum Dialokasi:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAllocationBalanced) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                )
+                            }
+                            Text(
+                                text = formatAuditRupiah(if (isAllocationBalanced) totalAllocated else remainingToAllocate),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isAllocationBalanced) Color(0xFF2E7D32) else Color(0xFFC62828)
+                            )
+                        }
+                    }
+                }
+
+                // SCROLLABLE AREA: Catatan dan Kartu-Kartu Pos Dompet
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        // Edit Catatan
+                        OutlinedTextField(
+                            value = editedNote,
+                            onValueChange = { editedNote = it },
+                            label = { Text("Catatan / Keterangan Evaluasi") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = false,
+                            maxLines = 3,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+
+                    if (record.isAdjusted) {
+                        item {
+                            Text(
+                                text = "Daftar Kantong Pos Dompet:",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2D1E4B)
+                            )
+                        }
+
+                        // Tampilkan setiap akun dompet dengan style Manajemen Dompet & Info Saldo Saat Ini
+                        items(actualAccounts, key = { it.idAkun }) { account ->
+                            val theme = getPosVisualTheme(account.namaAkun)
+                            val currentVal = editWalletAdjustments[account.idAkun] ?: ""
+                            val adjustmentAmount = parseAuditDouble(currentVal) ?: 0.0
+                            val row = summaryRows.find { it.idAkun == account.idAkun }
+                            val currentSystemBalance = row?.sisaSaldoRiil ?: account.saldoAwal
+
+                            // Hitung mutasi nyata yang terkait dengan sesi audit ini
+                            val linkedAuditMutations = allMutations.filter { m ->
+                                m.idAkun == account.idAkun && (
+                                    (record.id.isNotBlank() && m.keterangan.contains("[AUDIT_ID:${record.id}]")) ||
+                                    (record.keterangan.isNotBlank() && m.keterangan.contains("Audit Selisih Kas") && m.keterangan.contains(record.keterangan))
+                                )
+                            }
+                            val previousAuditDelta = if (record.isAdjusted) {
+                                if (linkedAuditMutations.isNotEmpty()) {
+                                    linkedAuditMutations.sumOf { m ->
+                                        if (m.jenisMutasi.equals("Uang Masuk", ignoreCase = true)) m.nominal else -m.nominal
+                                    }
+                                } else {
+                                    initialTriples.filter { it.first == account.idAkun }.sumOf { it.third }
+                                }
+                            } else {
+                                0.0
+                            }
+
+                            // Saldo Murni Dompet: Saldo sebelum alokasi audit sesi ini diterapkan
+                            // Ini menghentikan bug pembacaan ganda / double counting
+                            val pureBaseBalance = currentSystemBalance - previousAuditDelta
+
+                            // Estimasi Saldo Baru: Saldo Murni + Nominal Penyesuaian saat ini
+                            val projectedBalance = pureBaseBalance + adjustmentAmount
+
+                            Card(
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(
+                                    width = if (currentVal.isNotBlank()) 1.4.dp else 1.dp,
+                                    color = if (currentVal.isNotBlank()) theme.iconTint else Color(0xFFE4DAF7)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Header: Theme Icon Avatar (40dp circle) + Account Name
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .background(theme.bgPastel, CircleShape)
+                                                .border(BorderStroke(1.dp, theme.borderAccent), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = theme.icon,
+                                                contentDescription = account.namaAkun,
+                                                tint = theme.iconTint,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = account.namaAkun,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF2D1E4B)
+                                            )
+                                            Text(
+                                                text = "Pos Dompet Kas PGD",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF7A6E91)
+                                            )
+                                        }
+                                    }
+
+                                    // Kotak Informasi Saldo Saat Ini (Mengambil saldo murni sebelum penyesuaian sesi ini)
+                                    AuditAccountBalanceBadge(
+                                        label = "Saldo Saat Ini (${account.namaAkun}):",
+                                        balance = pureBaseBalance,
+                                        tintColor = theme.iconTint
+                                    )
+
+                                    if (record.isAdjusted && previousAuditDelta != 0.0) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "• Saldo murni sebelum audit sesi ini",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF7A6E91)
+                                            )
+                                            Text(
+                                                text = "Alokasi audit: ${if (previousAuditDelta > 0) "+" else ""}${formatAuditRupiah(previousAuditDelta)}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (previousAuditDelta > 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                            )
+                                        }
+                                    }
+
+                                    // Estimasi Saldo Baru jika ada nominal penyesuaian (Murni: Saldo Murni + Penyesuaian saat ini)
+                                    if (currentVal.isNotBlank() && (adjustmentAmount != 0.0 || previousAuditDelta != 0.0)) {
+                                        Surface(
+                                            color = if (adjustmentAmount > 0) Color(0xFFE8F5E9) else if (adjustmentAmount < 0) Color(0xFFFFEBEE) else Color(0xFFF3EDFA),
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (adjustmentAmount > 0) Color(0xFFA5D6A7) else if (adjustmentAmount < 0) Color(0xFFEF9A9A) else Color(0xFFD1C4E9)
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (adjustmentAmount > 0) Icons.Default.TrendingUp else if (adjustmentAmount < 0) Icons.Default.TrendingDown else Icons.Default.CheckCircle,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(16.dp),
+                                                            tint = if (adjustmentAmount > 0) Color(0xFF2E7D32) else if (adjustmentAmount < 0) Color(0xFFC62828) else Color(0xFF6A4C93)
+                                                        )
+                                                        Text(
+                                                            text = "Estimasi Saldo Baru:",
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF2D1E4B)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = formatAuditRupiah(projectedBalance),
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = if (adjustmentAmount > 0) Color(0xFF2E7D32) else if (adjustmentAmount < 0) Color(0xFFC62828) else Color(0xFF3B2369)
+                                                    )
+                                                }
+
+                                                // Rumus rincian transparan: Saldo Murni + Penyesuaian = Estimasi Saldo Akhir
+                                                Text(
+                                                    text = "Kalkulasi: ${formatAuditRupiah(pureBaseBalance)} (Saldo Murni) ${if (adjustmentAmount >= 0) "+ " else "- "}${formatAuditRupiah(kotlin.math.abs(adjustmentAmount))} (Penyesuaian) = ${formatAuditRupiah(projectedBalance)}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color(0xFF554B6E)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Input Field Penyesuaian
+                                    OutlinedTextField(
+                                        value = currentVal,
+                                        onValueChange = { input ->
+                                            if (input.isEmpty() || input == "-" || input.matches(Regex("^-?\\d*\\.?\\d*$"))) {
+                                                editWalletAdjustments[account.idAkun] = input
+                                            }
+                                        },
+                                        label = { Text("Nominal Penyesuaian (+/-)") },
+                                        placeholder = { Text("0 (cth: 50000 atau -50000)") },
+                                        supportingText = {
+                                            Text(
+                                                text = "Ketik nominal untuk menambah (+) atau mengurangi (-) saldo dompet ini",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF7A6E91)
+                                            )
+                                        },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+
+                                    // Shortcut Buttons Row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (currentVal.isNotBlank()) {
+                                            TextButton(
+                                                onClick = {
+                                                    editWalletAdjustments[account.idAkun] = ""
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                            ) {
+                                                Text("Reset", style = MaterialTheme.typography.labelSmall, color = Color(0xFFC62828))
+                                            }
+                                        }
+                                        if (abs(remainingToAllocate) > 0.0) {
+                                            Button(
+                                                onClick = {
+                                                    val curr = parseAuditDouble(currentVal) ?: 0.0
+                                                    val target = curr + remainingToAllocate
+                                                    editWalletAdjustments[account.idAkun] = if (target % 1.0 == 0.0) target.toLong().toString() else target.toString()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = theme.bgPastel,
+                                                    contentColor = theme.iconTint
+                                                ),
+                                                border = BorderStroke(1.dp, theme.borderAccent),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "+ Isi Sisa (${formatAuditRupiah(remainingToAllocate)})",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (record.isAdjusted && !isAllocationBalanced) {
+                        return@Button
+                    }
+                    val updatedTriples = mutableListOf<Triple<Int, String, Double>>()
+                    val detailItems = mutableListOf<String>()
+                    if (record.isAdjusted) {
+                        editWalletAdjustments.forEach { (idAkun, amountStr) ->
+                            val delta = parseAuditDouble(amountStr) ?: 0.0
+                            if (delta != 0.0) {
+                                val acc = actualAccounts.find { it.idAkun == idAkun }
+                                val accName = acc?.namaAkun ?: "Akun #$idAkun"
+                                detailItems.add("$accName: ${if (delta > 0) "+" else ""}${formatAuditRupiah(delta)}")
+                                updatedTriples.add(Triple(idAkun, accName, delta))
+                            }
+                        }
+                    }
+                    val updatedRecord = record.copy(
+                        keterangan = editedNote,
+                        detailPenyesuaian = if (record.isAdjusted) detailItems.joinToString(", ") else record.detailPenyesuaian,
+                        adjustmentsJson = if (record.isAdjusted) serializeAdjustments(updatedTriples) else record.adjustmentsJson
+                    )
+                    onSave(updatedRecord, updatedTriples)
+                },
+                enabled = !record.isAdjusted || isAllocationBalanced,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A4C93)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.testTag("btn_simpan_edit_audit")
+            ) {
+                Text(if (record.isAdjusted) "Simpan & Update Dompet" else "Simpan Perubahan", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Batal")
+            }
+        }
+    )
 }
 
 // Interactive Denomination Counting Dialog

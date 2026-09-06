@@ -73,6 +73,9 @@ interface FinanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMutation(mutation: MutasiManualKeluarMasuk): Long
 
+    @Update
+    suspend fun updateMutation(mutation: MutasiManualKeluarMasuk)
+
     @Query("DELETE FROM mutasi_manual_keluar_masuk WHERE id_mutasi = :idMutasi")
     suspend fun deleteMutationById(idMutasi: Int)
 
@@ -133,6 +136,9 @@ interface FinanceDao {
     @Delete
     suspend fun deleteInventaris(item: com.example.data.model.InventarisBahanBaku)
 
+    @Query("DELETE FROM inventaris_bahan_baku WHERE id_barang = :idBarang")
+    suspend fun deleteInventarisById(idBarang: Int)
+
     @Query("DELETE FROM inventaris_bahan_baku WHERE nama_barang IN ('Kertas HVS A4 70gr SiDU', 'Kertas HVS F4 70gr SiDU', 'Kertas Art Paper 260gr A3+', 'Tinta Epson 003 Black', 'Tinta Epson 003 CMY (1 Set)', 'Plastik OPP Bening 25x35', 'Kardus Packing Sedang') OR nama_barang LIKE '%HVS%' OR nama_barang LIKE '%Art Paper%'")
     suspend fun cleanSampleInventaris()
 
@@ -140,8 +146,17 @@ interface FinanceDao {
     @Query("SELECT * FROM transaksi_belanja_inventaris ORDER BY tanggal DESC, id_belanja DESC")
     fun getAllBelanjaInventarisFlow(): Flow<List<com.example.data.model.TransaksiBelanjaInventaris>>
 
+    @Query("SELECT * FROM transaksi_belanja_inventaris ORDER BY tanggal DESC, id_belanja DESC")
+    suspend fun getAllBelanjaInventarisDirect(): List<com.example.data.model.TransaksiBelanjaInventaris>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBelanjaInventaris(item: com.example.data.model.TransaksiBelanjaInventaris): Long
+
+    @Query("DELETE FROM transaksi_belanja_inventaris WHERE id_belanja = :idBelanja")
+    suspend fun deleteBelanjaInventarisById(idBelanja: Int)
+
+    @Update
+    suspend fun updateBelanjaInventaris(item: com.example.data.model.TransaksiBelanjaInventaris)
 
     @Delete
     suspend fun deleteBelanjaInventaris(item: com.example.data.model.TransaksiBelanjaInventaris)
@@ -155,4 +170,7 @@ interface FinanceDao {
 
     @Delete
     suspend fun deletePemakaianBahan(item: com.example.data.model.RiwayatPemakaianBahan)
+
+    @Query("DELETE FROM riwayat_pemakaian_bahan WHERE id_pemakaian = :idPemakaian")
+    suspend fun deletePemakaianBahanById(idPemakaian: Int)
 }

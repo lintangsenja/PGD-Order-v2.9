@@ -666,8 +666,9 @@ fun MainAppScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding(),
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                         color = colorScheme.background,
-                        border = BorderStroke(0.8.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         tonalElevation = 0.dp
                     ) {
                         Row(
@@ -1212,9 +1213,8 @@ fun PendingBayarTab(
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -1776,9 +1776,8 @@ fun RiwayatKasTab(
     val pendingCount = filteredList.count { it.status != "Lunas" }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 1. RINGKASAN TOTAL & KONTROL FILTER CARD
@@ -2546,9 +2545,8 @@ fun DashboardTab(
     val avgOrderValue = if (totalOrdersCount > 0) totalLabaKotor / totalOrdersCount else 0.0
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Section: Executive Summary Cards
@@ -4578,9 +4576,8 @@ fun DompetScreen(
     onNavigateToAuditKas: () -> Unit = {}
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -5391,9 +5388,8 @@ fun OrdersTab(orders: List<TransaksiOrderMasuk>, viewModel: FinanceViewModel) {
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (editingOrderId != null) {
@@ -7011,7 +7007,10 @@ fun MutationsTab(
                 )
             },
             text = {
-                Text("Apakah Anda yakin ingin menghapus mutasi kas Rp ${formatRupiah(mutToDelete.nominal)} (${mutToDelete.keterangan})?\nData akan dihapus dari database lokal Room dan Cloud Firestore secara real-time.")
+                val cleanKet = mutToDelete.keterangan.replace(Regex("""\s*\[BELANJA_INV:\d+\]"""), "")
+                val isBelanja = mutToDelete.keterangan.contains("[BELANJA_INV:") || mutToDelete.keterangan.contains("Belanja Inventaris", ignoreCase = true)
+                val extraNote = if (isBelanja) "\n\n⚠️ Mutasi ini terhubung dengan riwayat Pembelian & Belanja Inventaris. Menghapus mutasi ini akan otomatis membatalkan catatan belanja terkait dan melakukan rollback (pengurangan) stok fisik di Stok & Valuasi." else ""
+                Text("Apakah Anda yakin ingin menghapus mutasi kas Rp ${formatRupiah(mutToDelete.nominal)} ($cleanKet)?$extraNote\n\nSaldo kas akan disesuaikan kembali secara otomatis.")
             },
             confirmButton = {
                 Button(
@@ -7158,7 +7157,7 @@ fun MutationHistoryCard(
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Icon(
                     Icons.Default.Info,
@@ -7166,11 +7165,29 @@ fun MutationHistoryCard(
                     modifier = Modifier.size(14.dp),
                     tint = colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
+                val isBelanja = mutation.keterangan.contains("[BELANJA_INV:") || mutation.keterangan.contains("Belanja Inventaris", ignoreCase = true)
+                val cleanKet = mutation.keterangan.replace(Regex("""\s*\[BELANJA_INV:\d+\]"""), "")
                 Text(
-                    text = if (isTransfer) "Transfer: ${mutation.keterangan}" else mutation.keterangan,
+                    text = if (isTransfer) "Transfer: $cleanKet" else cleanKet,
                     style = MaterialTheme.typography.bodySmall,
-                    color = colorScheme.onSurfaceVariant
+                    color = colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+                if (isBelanja) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFF3E5F5),
+                        modifier = Modifier.padding(start = 4.dp)
+                    ) {
+                        Text(
+                            text = "Inventaris",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF8E24AA),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -10047,9 +10064,8 @@ fun LaporanTab(viewModel: FinanceViewModel) {
         when (selectedSubTab) {
             0 -> {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
         item {
@@ -10603,18 +10619,13 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                 }
             }
         }
-        
-        item {
-            Spacer(modifier = Modifier.height(48.dp))
-        }
     }
 }
 
             1 -> {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
@@ -10642,17 +10653,12 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                     item {
                         AllocationBarChart(summary.rows)
                     }
-
-                    item {
-                        Spacer(modifier = Modifier.height(48.dp))
-                    }
                 }
             }
             2 -> {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
@@ -10675,10 +10681,6 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                             summary = summary,
                             onAccountClick = { selectedLedgerAccount = it }
                         )
-                    }
-
-                    item {
-                        Spacer(modifier = Modifier.height(48.dp))
                     }
                 }
             }

@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -15,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,12 +30,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.InventarisBahanBaku
 import com.example.data.model.MasterAkunSaldo
 import com.example.data.model.RiwayatPemakaianBahan
 import com.example.data.model.TransaksiBelanjaInventaris
 import com.example.ui.viewmodel.FinanceViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,15 +53,25 @@ private val PgdGreenLight = Color(0xFFE8F5E9)
 private val PgdOrange = Color(0xFFE65100)
 private val PgdOrangeLight = Color(0xFFFFF3E0)
 
-private fun formatRupiah(amount: Double): String {
-    return "Rp " + String.format(Locale.GERMANY, "%,.0f", amount)
+private fun formatRupiah(amount: Double?): String {
+    if (amount == null || amount.isNaN() || amount.isInfinite()) return "Rp 0"
+    return try {
+        "Rp " + String.format(Locale.GERMANY, "%,.0f", amount)
+    } catch (e: Exception) {
+        "Rp 0"
+    }
 }
 
-private fun formatNumber(num: Double): String {
-    return if (num % 1.0 == 0.0) {
-        String.format(Locale.GERMANY, "%,.0f", num)
-    } else {
-        String.format(Locale.GERMANY, "%,.1f", num)
+private fun formatNumber(num: Double?): String {
+    if (num == null || num.isNaN() || num.isInfinite()) return "0"
+    return try {
+        if (num % 1.0 == 0.0) {
+            String.format(Locale.GERMANY, "%,.0f", num)
+        } else {
+            String.format(Locale.GERMANY, "%,.1f", num)
+        }
+    } catch (e: Exception) {
+        "0"
     }
 }
 
@@ -65,47 +81,49 @@ fun InventarisScreen(
     accounts: List<MasterAkunSaldo>,
     modifier: Modifier = Modifier
 ) {
-    val inventarisList by viewModel.allInventaris.collectAsStateWithLifecycle()
-    val belanjaList by viewModel.allBelanjaInventaris.collectAsStateWithLifecycle()
-    val pemakaianList by viewModel.allPemakaianBahan.collectAsStateWithLifecycle()
+    val rawInventarisList by viewModel.allInventaris.collectAsStateWithLifecycle(initialValue = emptyList())
+    val rawBelanjaList by viewModel.allBelanjaInventaris.collectAsStateWithLifecycle(initialValue = emptyList())
+    val rawPemakaianList by viewModel.allPemakaianBahan.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    var activeSubTab by remember { mutableIntStateOf(0) }
-    // 0: Ringkasan Aset, 1: Stok & Valuasi, 2: Pembelian & Belanja, 3: Pengeluaran & Koreksi
+    val inventarisList = remember(rawInventarisList) { (rawInventarisList ?: emptyList()).filterNotNull() }
+    val belanjaList = remember(rawBelanjaList) { (rawBelanjaList ?: emptyList()).filterNotNull() }
+    val pemakaianList = remember(rawPemakaianList) { (rawPemakaianList ?: emptyList()).filterNotNull() }
+    val safeAccounts = remember(accounts) { (accounts ?: emptyList()).filterNotNull() }
+
+    val tabs = remember {
+        listOf(
+            Pair("Ringkasan Aset", Icons.Default.Analytics),
+            Pair("Stok & Valuasi", Icons.Default.Inventory2),
+            Pair("Pembelian & Belanja", Icons.Default.ShoppingCart),
+            Pair("Pengeluaran & Koreksi", Icons.Default.Tune)
+        )
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { tabs.size }
+    )
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    // Sinkronisasi tab saat pager digeser (swipe) oleh pengguna
+    LaunchedEffect(pagerState.currentPage) {
+        selectedTabIndex = pagerState.currentPage.coerceIn(0, tabs.size - 1)
+    }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<InventarisBahanBaku?>(null) }
     var itemToKoreksi by remember { mutableStateOf<InventarisBahanBaku?>(null) }
     var itemToDelete by remember { mutableStateOf<InventarisBahanBaku?>(null) }
 
-    Scaffold(
-        containerColor = PgdLilacBg,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = PgdPurple,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp),
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 4.dp,
-                    pressedElevation = 8.dp
-                ),
-                modifier = Modifier
-                    .testTag("fab_tambah_bahan_baku")
-                    .padding(bottom = 8.dp, end = 8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Tambah Bahan Baku",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        },
-        floatingActionButtonPosition = FabPosition.End
-    ) { innerPadding ->
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(PgdLilacBg)
+    ) {
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .background(PgdLilacBg)
         ) {
             // Sub-Menu Navigation Bar (4 Tab Independen & Praktis)
@@ -116,25 +134,29 @@ fun InventarisScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 ScrollableTabRow(
-                    selectedTabIndex = activeSubTab,
+                    selectedTabIndex = selectedTabIndex.coerceIn(0, tabs.size - 1),
                     edgePadding = 12.dp,
                     containerColor = Color.White,
                     contentColor = PgdPurple,
                     indicator = {},
                     divider = {}
                 ) {
-                    val tabs = listOf(
-                        Pair("Ringkasan Aset", Icons.Default.Analytics),
-                        Pair("Stok & Valuasi", Icons.Default.Inventory2),
-                        Pair("Pembelian & Belanja", Icons.Default.ShoppingCart),
-                        Pair("Pengeluaran & Koreksi", Icons.Default.Tune)
-                    )
-
                     tabs.forEachIndexed { index, (title, icon) ->
-                        val isSelected = activeSubTab == index
+                        val isSelected = selectedTabIndex == index
                         Tab(
                             selected = isSelected,
-                            onClick = { activeSubTab = index },
+                            onClick = {
+                                selectedTabIndex = index
+                                coroutineScope.launch {
+                                    try {
+                                        pagerState.animateScrollToPage(index)
+                                    } catch (_: Exception) {
+                                        try {
+                                            pagerState.scrollToPage(index)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                            },
                             modifier = Modifier
                                 .padding(vertical = 8.dp, horizontal = 4.dp)
                                 .testTag("subtab_inventaris_$index"),
@@ -169,18 +191,38 @@ fun InventarisScreen(
                 }
             }
 
-            // Konten Dinamis Berdasarkan Tab Aktif
-            Box(
+            // Konten Dinamis Berdasarkan Tab Aktif (HorizontalPager dengan sinkronisasi gestur swipe & tap yang aman)
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .weight(1f)
-            ) {
-                when (activeSubTab) {
+                    .weight(1f),
+                beyondViewportPageCount = 1
+            ) { page ->
+                when (page) {
                     0 -> RingkasanAsetTab(
                         inventarisList = inventarisList,
                         belanjaList = belanjaList,
-                        onNavigateToStok = { activeSubTab = 1 },
-                        onNavigateToBelanja = { activeSubTab = 2 }
+                        onNavigateToStok = {
+                            selectedTabIndex = 1
+                            coroutineScope.launch {
+                                try {
+                                    pagerState.animateScrollToPage(1)
+                                } catch (_: Exception) {
+                                    try { pagerState.scrollToPage(1) } catch (_: Exception) {}
+                                }
+                            }
+                        },
+                        onNavigateToBelanja = {
+                            selectedTabIndex = 2
+                            coroutineScope.launch {
+                                try {
+                                    pagerState.animateScrollToPage(2)
+                                } catch (_: Exception) {
+                                    try { pagerState.scrollToPage(2) } catch (_: Exception) {}
+                                }
+                            }
+                        }
                     )
                     1 -> StokValuasiTab(
                         inventarisList = inventarisList,
@@ -191,7 +233,7 @@ fun InventarisScreen(
                     )
                     2 -> PembelianBelanjaTab(
                         viewModel = viewModel,
-                        accounts = accounts,
+                        accounts = safeAccounts,
                         inventarisList = inventarisList,
                         belanjaList = belanjaList
                     )
@@ -201,7 +243,32 @@ fun InventarisScreen(
                         pemakaianList = pemakaianList,
                         onKoreksiItem = { itemToKoreksi = it }
                     )
+                    else -> Box(Modifier.fillMaxSize())
                 }
+            }
+        }
+
+        // Floating Action Button (Hanya di tab Stok & Valuasi agar rapi dan tidak menghalangi tab lain)
+        if (pagerState.currentPage == 1) {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = PgdPurple,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp),
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 8.dp
+                ),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .testTag("fab_tambah_bahan_baku")
+                    .padding(bottom = 16.dp, end = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Tambah Bahan Baku",
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
@@ -321,9 +388,8 @@ private fun RingkasanAsetTab(
     val stokKritisCount = inventarisList.count { it.persentaseKondisi <= 25 || it.stokUtuh <= 1.0 }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Kartu Utama: Total Nilai Aset Fisik
@@ -394,7 +460,7 @@ private fun RingkasanAsetTab(
 
                     Text(
                         text = formatRupiah(totalNilaiAset),
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
                         fontWeight = FontWeight.ExtraBold,
                         color = PgdPurple
                     )
@@ -574,7 +640,7 @@ private fun RingkasanAsetTab(
         item {
             Text(
                 text = "Valuasi per Kategori Bahan",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                 fontWeight = FontWeight.Bold,
                 color = PgdPurpleDark
             )
@@ -767,6 +833,7 @@ private fun StokValuasiTab(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(filteredList, key = { it.idBarang }) { item ->
@@ -776,9 +843,6 @@ private fun StokValuasiTab(
                         onKoreksi = { onKoreksiItem(item) },
                         onDelete = { onDeleteItem(item) }
                     )
-                }
-                item {
-                    Spacer(modifier = Modifier.height(72.dp)) // Ruang untuk FAB
                 }
             }
         }
@@ -870,7 +934,7 @@ private fun BahanBakuItemCard(
             // Nama Barang
             Text(
                 text = item.namaBarang,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1A202C)
             )
@@ -887,29 +951,27 @@ private fun BahanBakuItemCard(
                 Column {
                     Text(
                         text = "Stok Fisik Tersedia",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF718096)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = item.statusStokGabungan,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                        fontWeight = FontWeight.ExtraBold,
+                        color = PgdPurpleDark
+                    )
+                    if (item.satuanUtuh.equals("Rim", ignoreCase = true) && item.stokUtuh % 1.0 != 0.0) {
                         Text(
-                            text = formatNumber(item.stokUtuh),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = PgdPurpleDark
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = item.satuanUtuh,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF4A5568)
+                            text = "(~${formatNumber(item.stokUtuh)} Rim)",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = Color(0xFF718096)
                         )
                     }
                     Text(
                         text = "@ ${formatRupiah(item.hargaSatuanUtuh)} / ${item.satuanUtuh}",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                         color = Color(0xFF718096)
                     )
                 }
@@ -917,14 +979,14 @@ private fun BahanBakuItemCard(
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "Total Nilai Aset",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF718096)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = formatRupiah(item.nilaiTotalAset),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                         fontWeight = FontWeight.ExtraBold,
                         color = PgdPurple
                     )
@@ -999,8 +1061,12 @@ private fun PembelianBelanjaTab(
     var catatanSelisih by remember { mutableStateOf("") }
     var selectedBarangId by remember { mutableStateOf<Int?>(null) }
     var namaBarangManual by remember { mutableStateOf("") }
+    var selectedKategori by remember { mutableStateOf("Kertas") }
+    var manualSatuan by remember { mutableStateOf("Rim") }
     var jumlahTambahStokText by remember { mutableStateOf("") }
     var potongKasOtomatis by remember { mutableStateOf(true) }
+    var deletingBelanja by remember { mutableStateOf<TransaksiBelanjaInventaris?>(null) }
+    var editingBelanja by remember { mutableStateOf<TransaksiBelanjaInventaris?>(null) }
 
     val uangKeluar = uangKeluarText.toDoubleOrNull() ?: 0.0
     val notaToko = notaTokoText.toDoubleOrNull() ?: 0.0
@@ -1009,9 +1075,8 @@ private fun PembelianBelanjaTab(
     val selectedAccount = accounts.find { it.idAkun == selectedAccountId }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Form Input Pembelian & Realisasi Belanja
@@ -1041,8 +1106,57 @@ private fun PembelianBelanjaTab(
                             Icon(Icons.Default.ShoppingCartCheckout, contentDescription = null, tint = PgdPurple, modifier = Modifier.size(20.dp))
                         }
                         Column {
-                            Text("Form Belanja Bahan Baku", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PgdPurpleDark)
-                            Text("Pemisahan uang kas dompet vs nota toko", style = MaterialTheme.typography.bodySmall, color = Color(0xFF718096))
+                            Text(
+                                text = if (editingBelanja != null) "Edit Realisasi Belanja Bahan Baku" else "Form Pembelian & Belanja Bahan Baku",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = PgdPurpleDark
+                            )
+                            Text("Terintegrasi otomatis ke Stok & Valuasi serta Mutasi Kas", style = MaterialTheme.typography.bodySmall, color = Color(0xFF718096))
+                        }
+                    }
+
+                    // Banner Mode Edit jika sedang mengedit
+                    AnimatedVisibility(visible = editingBelanja != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = PgdPurpleLight,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null, tint = PgdPurple, modifier = Modifier.size(16.dp))
+                                    Text(
+                                        text = "Mode Edit: ${editingBelanja?.namaBarang}",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                        fontWeight = FontWeight.Bold,
+                                        color = PgdPurpleDark
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        editingBelanja = null
+                                        uangKeluarText = ""
+                                        notaTokoText = ""
+                                        catatanSelisih = ""
+                                        jumlahTambahStokText = ""
+                                        namaBarangManual = ""
+                                        selectedBarangId = null
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Batal Edit", style = MaterialTheme.typography.labelMedium, color = Color(0xFFE53E3E), fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
 
@@ -1055,7 +1169,20 @@ private fun PembelianBelanjaTab(
                             val isSelected = acc.idAkun == selectedAccountId
                             FilterChip(
                                 selected = isSelected,
-                                onClick = { selectedAccountId = acc.idAkun },
+                                onClick = {
+                                    selectedAccountId = acc.idAkun
+                                    // Auto adjust kategori & satuan default based on selected dompet
+                                    if (acc.namaAkun.contains("Kertas", ignoreCase = true)) {
+                                        selectedKategori = "Kertas"
+                                        manualSatuan = "Rim"
+                                    } else if (acc.namaAkun.contains("Tinta", ignoreCase = true)) {
+                                        selectedKategori = "Tinta"
+                                        manualSatuan = "Botol"
+                                    } else if (acc.namaAkun.contains("Pengemasan", ignoreCase = true)) {
+                                        selectedKategori = "Plastik & Pengemasan"
+                                        manualSatuan = "Pack"
+                                    }
+                                },
                                 label = { Text(acc.namaAkun) },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = FilterChipDefaults.filterChipColors(
@@ -1077,8 +1204,8 @@ private fun PembelianBelanjaTab(
                         OutlinedTextField(
                             value = uangKeluarText,
                             onValueChange = { uangKeluarText = it.filter { ch -> ch.isDigit() } },
-                            label = { Text("Uang Keluar Kas") },
-                            placeholder = { Text("1.000.000") },
+                            label = { Text("Uang Keluar Dompet") },
+                            placeholder = { Text("920.000") },
                             prefix = { Text("Rp ", color = PgdPurple) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             shape = RoundedCornerShape(12.dp),
@@ -1090,8 +1217,8 @@ private fun PembelianBelanjaTab(
                         OutlinedTextField(
                             value = notaTokoText,
                             onValueChange = { notaTokoText = it.filter { ch -> ch.isDigit() } },
-                            label = { Text("Realisasi Nota") },
-                            placeholder = { Text("900.000") },
+                            label = { Text("Total Realisasi Nota") },
+                            placeholder = { Text("920.000") },
                             prefix = { Text("Rp ", color = PgdGreen) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             shape = RoundedCornerShape(12.dp),
@@ -1114,7 +1241,7 @@ private fun PembelianBelanjaTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text("Sisa Uang Belanja (Selisih):", style = MaterialTheme.typography.labelSmall, color = Color(0xFF718096))
+                                Text("Sisa Uang Belanja (Kembalian):", style = MaterialTheme.typography.labelSmall, color = Color(0xFF718096))
                                 Text(
                                     text = formatRupiah(selisih),
                                     style = MaterialTheme.typography.titleMedium,
@@ -1136,7 +1263,7 @@ private fun PembelianBelanjaTab(
                             value = catatanSelisih,
                             onValueChange = { catatanSelisih = it },
                             label = { Text("Catatan Penggunaan Sisa Uang") },
-                            placeholder = { Text("Misal: Bensin motor, makan siang, uang parkir, simpan di saku...") },
+                            placeholder = { Text("Misal: Bensin motor, makan siang, simpan di saku...") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("catatan_selisih_input"),
@@ -1144,17 +1271,21 @@ private fun PembelianBelanjaTab(
                         )
                     }
 
-                    // Hubungkan dengan Stok Inventaris
-                    Text("2. Alokasi Stok Bahan Baku (Opsional):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2D3748))
+                    // Hubungkan langsung dengan Stok & Valuasi
+                    Text("2. Alokasi Barang Fisik (Otomatis Masuk ke Stok & Valuasi):", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2D3748))
 
-                    // Dropdown / Chips Barang Terdaftar
+                    // Dropdown / Chips Barang Terdaftar vs Barang Baru
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
                             FilterChip(
                                 selected = selectedBarangId == null,
                                 onClick = { selectedBarangId = null },
-                                label = { Text("Barang Bebas / Baru") },
-                                shape = RoundedCornerShape(12.dp)
+                                label = { Text("+ Barang Baru / Manual") },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PgdPurple,
+                                    selectedLabelColor = Color.White
+                                )
                             )
                         }
                         items(inventarisList) { item ->
@@ -1180,10 +1311,31 @@ private fun PembelianBelanjaTab(
                             value = namaBarangManual,
                             onValueChange = { namaBarangManual = it },
                             label = { Text("Nama Barang yang Dibeli") },
-                            placeholder = { Text("Kertas HVS A4 SiDU 70gr") },
+                            placeholder = { Text("Contoh: SIDU A4S") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
+
+                        // Kategori Barang Baru
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Kategori Barang:", style = MaterialTheme.typography.labelSmall, color = Color(0xFF718096))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val kategoriList = listOf("Kertas", "Tinta", "Plastik & Pengemasan", "Operasional & Lainnya")
+                                items(kategoriList) { kat ->
+                                    val isKatSel = selectedKategori == kat
+                                    FilterChip(
+                                        selected = isKatSel,
+                                        onClick = { selectedKategori = kat },
+                                        label = { Text(kat, style = MaterialTheme.typography.labelSmall) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = PgdPurpleLight,
+                                            selectedLabelColor = PgdPurpleDark
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Row(
@@ -1193,22 +1345,55 @@ private fun PembelianBelanjaTab(
                         OutlinedTextField(
                             value = jumlahTambahStokText,
                             onValueChange = { jumlahTambahStokText = it },
-                            label = { Text("Jumlah Tambah Stok") },
-                            placeholder = { Text("10") },
+                            label = { Text("Jumlah Fisik (Stok Masuk)") },
+                            placeholder = { Text("Contoh: 20") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1.2f)
                         )
 
-                        val satuanDisplay = inventarisList.find { it.idBarang == selectedBarangId }?.satuanUtuh ?: "Rim/Pcs"
-                        OutlinedTextField(
-                            value = satuanDisplay,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Satuan") },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        )
+                        if (selectedBarangId != null) {
+                            val satuanDisplay = inventarisList.find { it.idBarang == selectedBarangId }?.satuanUtuh ?: "Pcs"
+                            OutlinedTextField(
+                                value = satuanDisplay,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Satuan") },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            OutlinedTextField(
+                                value = manualSatuan,
+                                onValueChange = { manualSatuan = it },
+                                label = { Text("Satuan (Rim/Pcs)") },
+                                placeholder = { Text("Rim") },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    if (selectedBarangId == null) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val quickSatuans = listOf("Rim", "Pcs", "Pack", "Botol", "Dus", "Roll")
+                            items(quickSatuans) { sat ->
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (manualSatuan.equals(sat, ignoreCase = true)) PgdPurpleLight else Color(0xFFF1F5F9),
+                                    border = BorderStroke(1.dp, if (manualSatuan.equals(sat, ignoreCase = true)) PgdPurple else Color.Transparent),
+                                    modifier = Modifier.clickable { manualSatuan = sat }
+                                ) {
+                                    Text(
+                                        sat,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (manualSatuan.equals(sat, ignoreCase = true)) PgdPurple else Color(0xFF475569),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // Checkbox Potong Kas Otomatis
@@ -1226,10 +1411,31 @@ private fun PembelianBelanjaTab(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Otomatis catat pengeluaran di kas utama (${selectedAccount?.namaAkun ?: "Dompet Kas"})",
+                            text = "Otomatis potong saldo dompet kas & catat mutasi keluar (${selectedAccount?.namaAkun ?: "Dompet Kas"})",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF2D3748)
                         )
+                    }
+
+                    // Sinkronisasi Info Banner
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFF0FDF4),
+                        border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Sync, contentDescription = null, tint = PgdGreen, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = "Otomatis menghubungkan mutasi kas keluar, pembaruan stok fisik di Stok & Valuasi, dan riwayat belanja secara real-time.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF166534)
+                            )
+                        }
                     }
 
                     // Tombol Submit Form Belanja
@@ -1240,22 +1446,46 @@ private fun PembelianBelanjaTab(
                             } else {
                                 namaBarangManual.ifBlank { "Belanja Bahan Baku" }
                             }
-                            val finalSatuan = inventarisList.find { it.idBarang == selectedBarangId }?.satuanUtuh ?: "Pcs"
+                            val finalSatuan = if (selectedBarangId != null) {
+                                inventarisList.find { it.idBarang == selectedBarangId }?.satuanUtuh ?: manualSatuan
+                            } else {
+                                manualSatuan.ifBlank { "Pcs" }
+                            }
                             val qty = jumlahTambahStokText.toDoubleOrNull() ?: 0.0
 
-                            viewModel.recordBelanjaInventaris(
-                                tanggal = today,
-                                idAkunKas = selectedAccountId,
-                                namaAkunKas = selectedAccount?.namaAkun ?: "Dompet Kertas",
-                                uangKeluarDompet = uangKeluar,
-                                realisasiNotaToko = if (notaToko > 0.0) notaToko else uangKeluar,
-                                catatanSelisih = catatanSelisih,
-                                idBarangTerkait = selectedBarangId,
-                                namaBarang = finalNamaBarang,
-                                jumlahTambahStok = qty,
-                                satuan = finalSatuan,
-                                potongKasOtomatis = potongKasOtomatis
-                            )
+                            if (editingBelanja != null) {
+                                viewModel.updateBelanjaInventaris(
+                                    oldRecord = editingBelanja!!,
+                                    tanggal = editingBelanja!!.tanggal,
+                                    idAkunKas = selectedAccountId,
+                                    namaAkunKas = selectedAccount?.namaAkun ?: "Dompet Kas",
+                                    uangKeluarDompet = uangKeluar,
+                                    realisasiNotaToko = if (notaToko > 0.0) notaToko else uangKeluar,
+                                    catatanSelisih = catatanSelisih,
+                                    idBarangTerkait = selectedBarangId,
+                                    namaBarang = finalNamaBarang,
+                                    kategoriBarang = selectedKategori,
+                                    jumlahTambahStok = qty,
+                                    satuan = finalSatuan,
+                                    potongKasOtomatis = potongKasOtomatis
+                                )
+                                editingBelanja = null
+                            } else {
+                                viewModel.recordBelanjaInventaris(
+                                    tanggal = today,
+                                    idAkunKas = selectedAccountId,
+                                    namaAkunKas = selectedAccount?.namaAkun ?: "Dompet Kas",
+                                    uangKeluarDompet = uangKeluar,
+                                    realisasiNotaToko = if (notaToko > 0.0) notaToko else uangKeluar,
+                                    catatanSelisih = catatanSelisih,
+                                    idBarangTerkait = selectedBarangId,
+                                    namaBarang = finalNamaBarang,
+                                    kategoriBarang = selectedKategori,
+                                    jumlahTambahStok = qty,
+                                    satuan = finalSatuan,
+                                    potongKasOtomatis = potongKasOtomatis
+                                )
+                            }
 
                             // Reset input
                             uangKeluarText = ""
@@ -1273,9 +1503,16 @@ private fun PembelianBelanjaTab(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = PgdPurple)
                     ) {
-                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = if (editingBelanja != null) Icons.Default.Check else Icons.Default.Save,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Catat Realisasi Belanja", fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (editingBelanja != null) "Simpan Perubahan Belanja" else "Catat Realisasi Belanja & Tambah Stok",
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -1285,7 +1522,7 @@ private fun PembelianBelanjaTab(
         item {
             Text(
                 text = "Riwayat Realisasi Belanja (${belanjaList.size})",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = PgdPurpleDark
             )
@@ -1304,15 +1541,101 @@ private fun PembelianBelanjaTab(
             }
         } else {
             items(belanjaList, key = { it.idBelanja }) { record ->
-                BelanjaRecordCard(record = record, onDelete = { viewModel.deleteBelanjaInventaris(record) })
+                BelanjaRecordCard(
+                    record = record,
+                    onEdit = {
+                        editingBelanja = record
+                        selectedAccountId = record.idAkunKas
+                        uangKeluarText = if (record.uangKeluarDompet > 0) record.uangKeluarDompet.toLong().toString() else ""
+                        notaTokoText = if (record.realisasiNotaToko > 0) record.realisasiNotaToko.toLong().toString() else ""
+                        catatanSelisih = record.catatanSelisih
+                        selectedBarangId = record.idBarangTerkait
+                        namaBarangManual = record.namaBarang
+                        manualSatuan = record.satuan
+                        jumlahTambahStokText = if (record.jumlahTambahStok > 0) formatNumber(record.jumlahTambahStok) else ""
+                        potongKasOtomatis = record.potongKasOtomatis
+                    },
+                    onDelete = { deletingBelanja = record }
+                )
             }
         }
+    }
+
+    if (deletingBelanja != null) {
+        val recordToDelete = deletingBelanja!!
+        AlertDialog(
+            onDismissRequest = { deletingBelanja = null },
+            title = {
+                Text(
+                    "Hapus Catatan Belanja & Rollback",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Apakah Anda yakin ingin menghapus catatan belanja '${recordToDelete.namaBarang}' senilai ${formatRupiah(recordToDelete.realisasiNotaToko)}?",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFFFBEB),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "Sinkronisasi Pembatalan (Rollback):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF92400E)
+                            )
+                            if (recordToDelete.potongKasOtomatis && recordToDelete.uangKeluarDompet > 0.0) {
+                                Text(
+                                    "• Mutasi kas keluar otomatis dihapus dan saldo kas dompet (${recordToDelete.namaAkunKas}) dikembalikan sebesar ${formatRupiah(recordToDelete.uangKeluarDompet)}.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF78350F)
+                                )
+                            }
+                            if (recordToDelete.jumlahTambahStok > 0.0) {
+                                Text(
+                                    "• Jumlah fisik barang (${recordToDelete.namaBarang}) di Stok & Valuasi akan di-rollback (dikurangi ${formatNumber(recordToDelete.jumlahTambahStok)} ${recordToDelete.satuan}).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF78350F)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteBelanjaInventaris(recordToDelete)
+                        deletingBelanja = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Hapus & Rollback", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingBelanja = null }) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
 
 @Composable
 private fun BelanjaRecordCard(
     record: TransaksiBelanjaInventaris,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -1408,8 +1731,33 @@ private fun BelanjaRecordCard(
                     Spacer(modifier = Modifier.width(1.dp))
                 }
 
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.DeleteOutline, contentDescription = "Hapus", tint = Color(0xFFE53E3E), modifier = Modifier.size(20.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Belanja",
+                            tint = PgdPurple,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Hapus",
+                            tint = Color(0xFFE53E3E),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1426,10 +1774,24 @@ private fun PengeluaranKoreksiTab(
     pemakaianList: List<RiwayatPemakaianBahan>,
     onKoreksiItem: (InventarisBahanBaku) -> Unit
 ) {
+    val safeInventarisList = remember(inventarisList) {
+        try {
+            (inventarisList ?: emptyList()).filterNotNull()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+    val safePemakaianList = remember(pemakaianList) {
+        try {
+            (pemakaianList ?: emptyList()).filterNotNull()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Banner Info Prinsip Independen & Praktis
@@ -1474,44 +1836,103 @@ private fun PengeluaranKoreksiTab(
         item {
             Text(
                 text = "Pilih Bahan Baku untuk Koreksi / Pemakaian",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                 fontWeight = FontWeight.Bold,
                 color = PgdPurpleDark
             )
         }
 
-        items(inventarisList, key = { it.idBarang }) { item ->
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, PgdSoftBorder),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onKoreksiItem(item) }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        if (safeInventarisList.isEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, PgdSoftBorder),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(item.namaBarang, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1A202C))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            "Stok: ${formatNumber(item.stokUtuh)} ${item.satuanUtuh} • Kondisi: ${item.statusKondisiText}",
+                            text = "Belum ada item bahan baku terdaftar",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF718096)
                         )
                     }
+                }
+            }
+        } else {
+            itemsIndexed(
+                safeInventarisList,
+                key = { idx, item ->
+                    val safeId = try { item.idBarang } catch (_: Exception) { idx }
+                    "koreksi_inv_${safeId}_$idx"
+                }
+            ) { _, item ->
+                val nama = try { (item.namaBarang as? String).orEmpty().ifBlank { "Bahan Baku" } } catch (_: Exception) { "Bahan Baku" }
+                val stokStr = try { item.statusStokGabungan } catch (_: Exception) { "0 Pcs" }
+                val kondisiStr = try { item.statusKondisiText } catch (_: Exception) { "100%" }
+                val valuasiVal = try { item.nilaiTotalAset } catch (_: Exception) { 0.0 }
 
-                    Button(
-                        onClick = { onKoreksiItem(item) },
-                        colors = ButtonDefaults.buttonColors(containerColor = PgdPurpleLight),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp)
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, PgdSoftBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            try {
+                                onKoreksiItem(item)
+                            } catch (e: Exception) {
+                                android.util.Log.e("InventarisScreen", "Error onKoreksiItem: ${e.message}")
+                            }
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Koreksi", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = PgdPurple)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = nama,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1A202C)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Stok: $stokStr • Kondisi: $kondisiStr",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFF718096)
+                            )
+                            Text(
+                                text = "Valuasi: ${formatRupiah(valuasiVal)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = PgdPurple
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                try {
+                                    onKoreksiItem(item)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("InventarisScreen", "Error onKoreksiItem: ${e.message}")
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PgdPurpleLight),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp)
+                        ) {
+                            Text("Koreksi", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = PgdPurple)
+                        }
                     }
                 }
             }
@@ -1521,26 +1942,46 @@ private fun PengeluaranKoreksiTab(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Riwayat Koreksi & Pemakaian (${pemakaianList.size})",
-                style = MaterialTheme.typography.titleLarge,
+                text = "Riwayat Koreksi & Pemakaian (${safePemakaianList.size})",
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                 fontWeight = FontWeight.Bold,
                 color = PgdPurpleDark
             )
         }
 
-        if (pemakaianList.isEmpty()) {
+        if (safePemakaianList.isEmpty()) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, PgdSoftBorder),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Belum ada catatan log pemakaian", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF718096))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Belum ada catatan log pemakaian", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF718096))
+                    }
                 }
             }
         } else {
-            items(pemakaianList, key = { it.idPemakaian }) { log ->
+            itemsIndexed(
+                safePemakaianList,
+                key = { idx, log ->
+                    val safeId = try { log.idPemakaian } catch (_: Exception) { idx }
+                    "pemakaian_${safeId}_$idx"
+                }
+            ) { _, log ->
+                val perubahan = try { (log.nilaiPerubahan as? String).orEmpty() } catch (_: Exception) { "" }
+                val isPositive = perubahan.startsWith("+")
+                val namaBarang = try { (log.namaBarang as? String).orEmpty().ifBlank { "Bahan Baku" } } catch (_: Exception) { "Bahan Baku" }
+                val jenisKoreksi = try { (log.jenisKoreksi as? String).orEmpty().ifBlank { "Pemakaian" } } catch (_: Exception) { "Pemakaian" }
+                val tanggal = try { (log.tanggal as? String).orEmpty().ifBlank { "-" } } catch (_: Exception) { "-" }
+                val ket = try { (log.keterangan as? String).orEmpty().ifBlank { "Pemakaian operasional" } } catch (_: Exception) { "Pemakaian operasional" }
+
                 Card(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1559,32 +2000,55 @@ private fun PengeluaranKoreksiTab(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(log.namaBarang, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF1A202C))
+                                Text(namaBarang, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF1A202C))
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = PgdPurpleLight
                                 ) {
-                                    Text(log.jenisKoreksi, style = MaterialTheme.typography.labelMedium, color = PgdPurple, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                                    Text(jenisKoreksi, style = MaterialTheme.typography.labelMedium, color = PgdPurple, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                                 }
                             }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "${log.tanggal} • ${log.keterangan.ifBlank { "Pemakaian operasional" }}",
+                                text = "$tanggal • $ket",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color(0xFF718096)
                             )
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (log.nilaiPerubahan.startsWith("+")) Color(0xFFE8F5E9) else Color(0xFFFFF1F2)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = log.nilaiPerubahan,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (log.nilaiPerubahan.startsWith("+")) Color(0xFF2E7D32) else Color(0xFFBE123C),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isPositive) Color(0xFFE8F5E9) else Color(0xFFFFF1F2)
+                            ) {
+                                Text(
+                                    text = perubahan,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isPositive) Color(0xFF2E7D32) else Color(0xFFBE123C),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    try {
+                                        viewModel.deletePemakaianBahan(log)
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("InventarisScreen", "Error deleting log: ${e.message}")
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteOutline,
+                                    contentDescription = "Hapus Log",
+                                    tint = Color(0xFFE53E3E),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1752,26 +2216,148 @@ private fun FormItemInventarisDialog(
 }
 
 // -------------------------------------------------------------
-// DIALOG: KOREKSI STOK PRAKTIS (PERSENTASE & SATUAN UTUH)
+// DIALOG: KOREKSI STOK PRAKTIS (PERSENTASE & SATUAN UTUH / LEMBARAN)
 // -------------------------------------------------------------
+private data class KoreksiCalculationResult(
+    val sisaStokLabel: String,
+    val sisaDesimalLabel: String,
+    val penurunanValuasi: Double,
+    val valuasiBaru: Double
+)
+
 @Composable
 private fun KoreksiStokPraktisDialog(
     item: InventarisBahanBaku,
     onDismiss: () -> Unit,
     onApply: (jenis: String, jumlah: Double, persentase: Int, keterangan: String) -> Unit
 ) {
-    var modeKoreksi by remember { mutableStateOf("Persentase") } // "Persentase" vs "Kurangi Utuh" vs "Tambah Utuh"
+    val isRim = (item.satuanUtuh as String?).orEmpty().equals("Rim", ignoreCase = true)
+    val availableModes = listOf("Ambil Stok", "Tambah Stok", "Kondisi Fisik")
+
+    var modeKoreksi by remember { mutableStateOf("Ambil Stok") }
     var selectedPersentase by remember { mutableIntStateOf(item.persentaseKondisi) }
-    var jumlahUtuhText by remember { mutableStateOf("1") }
+    
+    // States untuk pemakaian bahan
+    // Jika kertas Rim: input Rim & Lembar eceran
+    val currentStokUtuh = item.stokUtuh
+    var rimAmbilText by remember { 
+        mutableStateOf(if (currentStokUtuh >= 2.4) "2" else if (currentStokUtuh >= 1.0) "1" else "0") 
+    }
+    var lembarAmbilText by remember { 
+        mutableStateOf(if (currentStokUtuh >= 2.4) "200" else "0") 
+    }
+    var jumlahAmbilNonRimText by remember { mutableStateOf("1") }
+
+    // States untuk penambahan bahan
+    var rimTambahText by remember { mutableStateOf("5") }
+    var lembarTambahText by remember { mutableStateOf("0") }
+    var jumlahTambahNonRimText by remember { mutableStateOf("5") }
+
     var keterangan by remember { mutableStateOf("") }
 
     val persentaseOptions = listOf(
-        Pair("100% (Penuh/Utuh)", 100),
+        Pair("100% (Penuh / Utuh)", 100),
         Pair("75% (Sisa 3/4)", 75),
         Pair("50% (Sisa Separuh)", 50),
         Pair("25% (Sisa 1/4)", 25),
         Pair("0% (Habis Total)", 0)
     )
+
+    // Perhitungan Live Real-Time
+    // 1 Rim = 500 lembar
+    val rimAmbil = rimAmbilText.toDoubleOrNull() ?: 0.0
+    val lembarAmbil = lembarAmbilText.toDoubleOrNull() ?: 0.0
+    val totalLembarAmbil = (rimAmbil * 500.0) + lembarAmbil
+    val totalRimAmbil = totalLembarAmbil / 500.0
+    val totalLembarAwal = Math.round(item.stokUtuh * 500.0).toDouble()
+
+    val rimTambah = rimTambahText.toDoubleOrNull() ?: 0.0
+    val lembarTambah = lembarTambahText.toDoubleOrNull() ?: 0.0
+    val totalLembarTambah = (rimTambah * 500.0) + lembarTambah
+    val totalRimTambah = totalLembarTambah / 500.0
+
+    val jumlahAmbilNonRim = jumlahAmbilNonRimText.toDoubleOrNull() ?: 0.0
+    val jumlahTambahNonRim = jumlahTambahNonRimText.toDoubleOrNull() ?: 0.0
+
+    // Validasi Kelayakan Input
+    val isInputValid = when (modeKoreksi) {
+        "Ambil Stok" -> {
+            if (isRim) {
+                totalLembarAmbil > 0 && totalLembarAmbil <= totalLembarAwal
+            } else {
+                jumlahAmbilNonRim > 0 && jumlahAmbilNonRim <= item.stokUtuh
+            }
+        }
+        "Tambah Stok" -> {
+            if (isRim) {
+                totalLembarTambah > 0
+            } else {
+                jumlahTambahNonRim > 0
+            }
+        }
+        "Kondisi Fisik" -> true
+        else -> false
+    }
+
+    // Hitung Sisa Fisik & Valuasi Baru secara Real-Time dengan tipe data aman
+    val calcResult = remember(
+        modeKoreksi, totalLembarAmbil, totalLembarTambah, jumlahAmbilNonRim, jumlahTambahNonRim, selectedPersentase, item
+    ) {
+        when (modeKoreksi) {
+            "Ambil Stok" -> {
+                if (isRim) {
+                    val sisaLembar = maxOf(0.0, totalLembarAwal - totalLembarAmbil)
+                    val sisaRim = sisaLembar / 500.0
+                    val penurunan = totalRimAmbil * (item.persentaseKondisi / 100.0) * item.hargaSatuanUtuh
+                    val valuasiBaru = maxOf(0.0, item.nilaiTotalAset - penurunan)
+                    val formatted = InventarisBahanBaku.formatStokGabungan(sisaRim, "Rim")
+                    val sisaRimDesimal = Math.round(sisaRim * 10.0) / 10.0
+                    val desimalText = if (sisaRimDesimal % 1.0 == 0.0) {
+                        String.format(Locale.GERMANY, "%,.0f", sisaRimDesimal)
+                    } else {
+                        String.format(Locale.GERMANY, "%,.1f", sisaRimDesimal)
+                    }
+                    KoreksiCalculationResult(formatted, desimalText, penurunan, valuasiBaru)
+                } else {
+                    val sisa = maxOf(0.0, item.stokUtuh - jumlahAmbilNonRim)
+                    val penurunan = jumlahAmbilNonRim * (item.persentaseKondisi / 100.0) * item.hargaSatuanUtuh
+                    val valuasiBaru = maxOf(0.0, item.nilaiTotalAset - penurunan)
+                    KoreksiCalculationResult(InventarisBahanBaku.formatStokGabungan(sisa, item.satuanUtuh), formatNumber(sisa), penurunan, valuasiBaru)
+                }
+            }
+            "Tambah Stok" -> {
+                if (isRim) {
+                    val totalLembarBaru = totalLembarAwal + totalLembarTambah
+                    val rimBaru = totalLembarBaru / 500.0
+                    val kenaikan = totalRimTambah * (item.persentaseKondisi / 100.0) * item.hargaSatuanUtuh
+                    val valuasiBaru = item.nilaiTotalAset + kenaikan
+                    val formatted = InventarisBahanBaku.formatStokGabungan(rimBaru, "Rim")
+                    val rimDesimal = Math.round(rimBaru * 10.0) / 10.0
+                    val desimalText = if (rimDesimal % 1.0 == 0.0) {
+                        String.format(Locale.GERMANY, "%,.0f", rimDesimal)
+                    } else {
+                        String.format(Locale.GERMANY, "%,.1f", rimDesimal)
+                    }
+                    KoreksiCalculationResult(formatted, desimalText, -kenaikan, valuasiBaru)
+                } else {
+                    val stokBaru = item.stokUtuh + jumlahTambahNonRim
+                    val kenaikan = jumlahTambahNonRim * (item.persentaseKondisi / 100.0) * item.hargaSatuanUtuh
+                    val valuasiBaru = item.nilaiTotalAset + kenaikan
+                    KoreksiCalculationResult(InventarisBahanBaku.formatStokGabungan(stokBaru, item.satuanUtuh), formatNumber(stokBaru), -kenaikan, valuasiBaru)
+                }
+            }
+            else -> { // "Kondisi Fisik"
+                val valuasiBaru = item.stokUtuh * (selectedPersentase / 100.0) * item.hargaSatuanUtuh
+                val penurunan = item.nilaiTotalAset - valuasiBaru
+                KoreksiCalculationResult(item.statusStokGabungan, formatNumber(item.stokUtuh), penurunan, valuasiBaru)
+            }
+        }
+    }
+
+    val sisaStokLabel = calcResult.sisaStokLabel
+    val sisaDesimalLabel = calcResult.sisaDesimalLabel
+    val penurunanValuasi = calcResult.penurunanValuasi
+    val valuasiBaru = calcResult.valuasiBaru
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1786,8 +2372,9 @@ private fun KoreksiStokPraktisDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Info Kartu Stok Saat Ini
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = PgdPurpleLight,
@@ -1798,19 +2385,34 @@ private fun KoreksiStokPraktisDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Stok Saat Ini: ${formatNumber(item.stokUtuh)} ${item.satuanUtuh}", fontWeight = FontWeight.Bold, color = PgdPurpleDark)
-                        Text(item.statusKondisiText, fontWeight = FontWeight.SemiBold, color = PgdPurple)
+                        Column {
+                            Text("Stok Fisik Awal:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF718096))
+                            Text(item.statusStokGabungan, fontWeight = FontWeight.ExtraBold, color = PgdPurpleDark)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Valuasi Awal:", style = MaterialTheme.typography.bodySmall, color = Color(0xFF718096))
+                            Text(formatRupiah(item.nilaiTotalAset), fontWeight = FontWeight.Bold, color = PgdPurple)
+                        }
                     }
                 }
 
-                // Pilihan Mode Koreksi
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("Persentase", "Kurangi Utuh", "Tambah Utuh").forEach { mode ->
+                // Pilihan Mode Koreksi (Chips)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    availableModes.forEach { mode ->
                         val isSelected = modeKoreksi == mode
                         FilterChip(
                             selected = isSelected,
                             onClick = { modeKoreksi = mode },
-                            label = { Text(mode, style = MaterialTheme.typography.labelSmall) },
+                            label = { 
+                                Text(
+                                    text = mode,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                ) 
+                            },
                             shape = RoundedCornerShape(10.dp),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = PgdPurple,
@@ -1821,21 +2423,155 @@ private fun KoreksiStokPraktisDialog(
                     }
                 }
 
+                // Input Dinamis Berdasarkan Mode
                 when (modeKoreksi) {
-                    "Persentase" -> {
-                        Text(
-                            text = "Pilih Persentase Pemakaian Praktis:",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF4A5568)
-                        )
+                    "Ambil Stok" -> {
+                        if (isRim) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Bahan yang Diambil / Dipakai:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4A5568)
+                                )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = rimAmbilText,
+                                        onValueChange = { rimAmbilText = it },
+                                        label = { Text("Rim (Utuh)") },
+                                        placeholder = { Text("2") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = lembarAmbilText,
+                                        onValueChange = { lembarAmbilText = it },
+                                        label = { Text("Lembar (Eceran)") },
+                                        placeholder = { Text("200") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                }
+                                
+                                if (totalLembarAmbil > 0) {
+                                    val ambilGabungan = InventarisBahanBaku.formatStokGabungan(totalRimAmbil, "Rim")
+                                    val rimDesimalStr = if (totalRimAmbil % 1.0 == 0.0) {
+                                        String.format(Locale.GERMANY, "%,.0f", totalRimAmbil)
+                                    } else {
+                                        String.format(Locale.GERMANY, "%,.1f", totalRimAmbil)
+                                    }
+                                    Text(
+                                        text = "📦 Total diambil: $ambilGabungan (${totalLembarAmbil.toLong()} Lembar atau $rimDesimalStr Rim)",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                        color = PgdPurpleDark,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                if (totalLembarAmbil > totalLembarAwal) {
+                                    Text(
+                                        text = "⚠️ Pengambilan (${totalLembarAmbil.toLong()} lbr) melebihi stok yang ada di rak gudang (${item.statusStokGabungan}).",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = Color(0xFFC53030),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                } else {
+                                    Text(
+                                        text = "💡 Standar: 1 Rim = 500 Lembar. Bisa diisi Rim saja, Lembar saja, atau kombinasi keduanya.",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                                        color = Color(0xFF718096)
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedTextField(
+                                    value = jumlahAmbilNonRimText,
+                                    onValueChange = { jumlahAmbilNonRimText = it },
+                                    label = { Text("Jumlah yang Diambil (${item.satuanUtuh})") },
+                                    placeholder = { Text("1") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                if (jumlahAmbilNonRim > item.stokUtuh) {
+                                    Text(
+                                        text = "⚠️ Jumlah diambil (${formatNumber(jumlahAmbilNonRim)} ${item.satuanUtuh}) melebihi stok gudang (${item.statusStokGabungan}).",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = Color(0xFFC53030),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    "Tambah Stok" -> {
+                        if (isRim) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Bahan yang Ditambahkan:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4A5568)
+                                )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = rimTambahText,
+                                        onValueChange = { rimTambahText = it },
+                                        label = { Text("Rim (Utuh)") },
+                                        placeholder = { Text("5") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = lembarTambahText,
+                                        onValueChange = { lembarTambahText = it },
+                                        label = { Text("Lembar (Eceran)") },
+                                        placeholder = { Text("0") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                }
+                                if (totalLembarTambah > 0) {
+                                    val tambahGabungan = InventarisBahanBaku.formatStokGabungan(totalRimTambah, "Rim")
+                                    Text(
+                                        text = "📦 Total ditambah: $tambahGabungan (${totalLembarTambah.toLong()} Lembar)",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                        color = PgdPurpleDark,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        } else {
+                            OutlinedTextField(
+                                value = jumlahTambahNonRimText,
+                                onValueChange = { jumlahTambahNonRimText = it },
+                                label = { Text("Jumlah Penambahan (${item.satuanUtuh})") },
+                                placeholder = { Text("5") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+                    }
+                    "Kondisi Fisik" -> {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "Pilih Persentase Kondisi Fisik Riil:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4A5568)
+                            )
                             persentaseOptions.forEach { (label, valInt) ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { selectedPersentase = valInt }
-                                        .padding(vertical = 4.dp),
+                                        .padding(vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RadioButton(
@@ -1849,35 +2585,144 @@ private fun KoreksiStokPraktisDialog(
                             }
                         }
                     }
-                    "Kurangi Utuh" -> {
-                        OutlinedTextField(
-                            value = jumlahUtuhText,
-                            onValueChange = { jumlahUtuhText = it },
-                            label = { Text("Jumlah Pengurangan (${item.satuanUtuh})") },
-                            placeholder = { Text("1") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                    }
-                    "Tambah Utuh" -> {
-                        OutlinedTextField(
-                            value = jumlahUtuhText,
-                            onValueChange = { jumlahUtuhText = it },
-                            label = { Text("Jumlah Penambahan (${item.satuanUtuh})") },
-                            placeholder = { Text("5") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                }
+
+                // Kotak Live Preview Hasil Perhitungan & Valuasi Aset
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = PgdLilacBg),
+                    border = BorderStroke(1.dp, PgdPurpleLight),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = PgdPurpleDark,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Live Hasil Perhitungan & Valuasi",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = PgdPurpleDark
+                            )
+                        }
+
+                        HorizontalDivider(color = PgdPurpleLight, thickness = 1.dp)
+
+                        // 1. Sisa Stok di Rak Gudang
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "Sisa Stok di Rak Gudang:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4A5568)
+                            )
+                            Text(
+                                text = sisaStokLabel,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = PgdPurpleDark
+                            )
+                            if (modeKoreksi == "Ambil Stok") {
+                                val rincianAmbil = if (isRim) {
+                                    val ambilStr = InventarisBahanBaku.formatStokGabungan(totalRimAmbil, "Rim")
+                                    "Stok awal ${item.statusStokGabungan} − $ambilStr (${totalLembarAmbil.toLong()} lbr) = $sisaStokLabel (setara $sisaDesimalLabel Rim)"
+                                } else {
+                                    "Stok awal ${item.statusStokGabungan} − diambil ${formatNumber(jumlahAmbilNonRim)} ${item.satuanUtuh}"
+                                }
+                                Text(
+                                    text = rincianAmbil,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = Color(0xFF718096)
+                                )
+                            } else if (modeKoreksi == "Tambah Stok") {
+                                val rincianTambah = if (isRim) {
+                                    val tambahStr = InventarisBahanBaku.formatStokGabungan(totalRimTambah, "Rim")
+                                    "Stok awal ${item.statusStokGabungan} + $tambahStr (${totalLembarTambah.toLong()} lbr) = $sisaStokLabel (setara $sisaDesimalLabel Rim)"
+                                } else {
+                                    "Stok awal ${item.statusStokGabungan} + ditambah ${formatNumber(jumlahTambahNonRim)} ${item.satuanUtuh}"
+                                }
+                                Text(
+                                    text = rincianTambah,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = Color(0xFF718096)
+                                )
+                            } else {
+                                Text(
+                                    text = "Kondisi fisik barang disesuaikan menjadi $selectedPersentase%",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = Color(0xFF718096)
+                                )
+                            }
+                        }
+
+                        // 2. Valuasi Aset Gudang
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "Valuasi Aset Gudang:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4A5568)
+                            )
+                            val diffSign = if (penurunanValuasi > 0) {
+                                "-${formatRupiah(penurunanValuasi)}"
+                            } else if (penurunanValuasi < 0) {
+                                "+${formatRupiah(-penurunanValuasi)}"
+                            } else {
+                                "Rp 0"
+                            }
+                            Text(
+                                text = "${formatRupiah(item.nilaiTotalAset)} ➔ ${formatRupiah(valuasiBaru)} ($diffSign)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (penurunanValuasi > 0) Color(0xFFC53030) else if (penurunanValuasi < 0) Color(0xFF2F855A) else Color(0xFF2D3748)
+                            )
+                            if (modeKoreksi == "Ambil Stok" && isRim && totalLembarAmbil > 0) {
+                                val hargaPerLembar = item.hargaSatuanUtuh / 500.0
+                                Text(
+                                    text = "Pengurangan nilai: ${totalLembarAmbil.toLong()} lbr x ${formatRupiah(hargaPerLembar)}/lbr (${formatRupiah(item.hargaSatuanUtuh)}/Rim)",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                                    color = Color(0xFF718096)
+                                )
+                            }
+                        }
+
+                        // 3. Penegasan Catatan Dompet Kas Utama
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "🔒", fontSize = 11.sp)
+                                Text(
+                                    text = "Perubahan ini murni untuk pembukuan internal inventaris gudang dan tidak mengubah atau mengganggu saldo riil Dompet Kas utama.",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp, lineHeight = 14.sp),
+                                    color = Color(0xFF718096)
+                                )
+                            }
+                        }
                     }
                 }
 
                 OutlinedTextField(
                     value = keterangan,
                     onValueChange = { keterangan = it },
-                    label = { Text("Keterangan Pemakaian / Keperluan") },
-                    placeholder = { Text("Misal: Dipakai untuk cetak brosur SMKN 1, tes cetak...") },
+                    label = { Text("Keterangan Tambahan (Opsional)") },
+                    placeholder = { Text("Misal: Dipakai untuk cetak pesanan SMKN 1, tes mesin...") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -1885,20 +2730,40 @@ private fun KoreksiStokPraktisDialog(
         },
         confirmButton = {
             Button(
+                enabled = isInputValid,
                 onClick = {
-                    val jumlah = jumlahUtuhText.toDoubleOrNull() ?: 0.0
-                    val jenis = when (modeKoreksi) {
-                        "Persentase" -> "Ubah Persentase"
-                        "Kurangi Utuh" -> "Kurangi Satuan Utuh"
-                        else -> "Tambah Stok Fisik"
+                    when (modeKoreksi) {
+                        "Ambil Stok" -> {
+                            if (isRim) {
+                                val ambilStr = InventarisBahanBaku.formatStokGabungan(totalRimAmbil, "Rim")
+                                val autoKet = "Ambil $ambilStr (${totalLembarAmbil.toLong()} lbr). Sisa di rak gudang: $sisaStokLabel" + if (keterangan.isNotBlank()) " • $keterangan" else ""
+                                onApply("Pemakaian Lembaran", totalRimAmbil, item.persentaseKondisi, autoKet)
+                            } else {
+                                val autoKet = "Ambil ${formatNumber(jumlahAmbilNonRim)} ${item.satuanUtuh}. Sisa di rak gudang: $sisaStokLabel" + if (keterangan.isNotBlank()) " • $keterangan" else ""
+                                onApply("Pemakaian Lembaran", jumlahAmbilNonRim, item.persentaseKondisi, autoKet)
+                            }
+                        }
+                        "Tambah Stok" -> {
+                            if (isRim) {
+                                val tambahStr = InventarisBahanBaku.formatStokGabungan(totalRimTambah, "Rim")
+                                val autoKet = "Tambah fisik +$tambahStr (${totalLembarTambah.toLong()} lbr). Sisa di rak gudang: $sisaStokLabel" + if (keterangan.isNotBlank()) " • $keterangan" else ""
+                                onApply("Tambah Stok Fisik", totalRimTambah, item.persentaseKondisi, autoKet)
+                            } else {
+                                val autoKet = "Tambah fisik +${formatNumber(jumlahTambahNonRim)} ${item.satuanUtuh}. Sisa di rak gudang: $sisaStokLabel" + if (keterangan.isNotBlank()) " • $keterangan" else ""
+                                onApply("Tambah Stok Fisik", jumlahTambahNonRim, item.persentaseKondisi, autoKet)
+                            }
+                        }
+                        else -> { // "Kondisi Fisik"
+                            val autoKet = "Koreksi kondisi fisik menjadi $selectedPersentase%" + if (keterangan.isNotBlank()) " • $keterangan" else ""
+                            onApply("Ubah Persentase", 0.0, selectedPersentase, autoKet)
+                        }
                     }
-                    onApply(jenis, jumlah, selectedPersentase, keterangan)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = PgdPurple),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.testTag("apply_koreksi_stok_btn")
             ) {
-                Text("Terapkan Koreksi", fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Terapkan", fontWeight = FontWeight.Bold, color = Color.White)
             }
         },
         dismissButton = {

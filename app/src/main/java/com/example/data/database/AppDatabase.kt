@@ -26,7 +26,7 @@ import com.example.data.model.RiwayatPemakaianBahan
         TransaksiBelanjaInventaris::class,
         RiwayatPemakaianBahan::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -98,6 +98,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_13_14 = object : androidx.room.migration.Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS riwayat_pemakaian_bahan (
+                        id_pemakaian INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tanggal TEXT NOT NULL,
+                        id_barang INTEGER NOT NULL,
+                        nama_barang TEXT NOT NULL,
+                        jenis_koreksi TEXT NOT NULL,
+                        nilai_perubahan TEXT NOT NULL,
+                        keterangan TEXT NOT NULL DEFAULT ''
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -105,7 +121,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "envelope_budgeting_db"
                 )
-                    .addMigrations(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                    .addMigrations(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                     .fallbackToDestructiveMigration()
                     .addCallback(DatabaseCallback())
                     .build()
@@ -117,6 +133,17 @@ abstract class AppDatabase : RoomDatabase() {
         private class DatabaseCallback : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS riwayat_pemakaian_bahan (
+                        id_pemakaian INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        tanggal TEXT NOT NULL,
+                        id_barang INTEGER NOT NULL,
+                        nama_barang TEXT NOT NULL,
+                        jenis_koreksi TEXT NOT NULL,
+                        nilai_perubahan TEXT NOT NULL,
+                        keterangan TEXT NOT NULL DEFAULT ''
+                    )
+                """.trimIndent())
                 // Seed the 9 master accounts/wallets required by the system
                 db.execSQL("INSERT INTO master_akun_saldo (id_akun, nama_akun, persentase_operasional, konstan_hpp_unit, saldo_awal) VALUES (1, 'Dompet Kertas', 0.0, 106.0, 0.0);")
                 db.execSQL("INSERT INTO master_akun_saldo (id_akun, nama_akun, persentase_operasional, konstan_hpp_unit, saldo_awal) VALUES (2, 'Dompet Tinta', 0.0, 25.0, 0.0);")
@@ -152,6 +179,9 @@ abstract class AppDatabase : RoomDatabase() {
 
                 // Bersihkan total data sampel bahan baku bawaan
                 db.execSQL("DELETE FROM inventaris_bahan_baku WHERE id_barang IN (1, 2, 3, 4, 5, 6, 7) OR nama_barang LIKE '%HVS%' OR nama_barang LIKE '%Art Paper%' OR nama_barang LIKE '%Tinta Epson%' OR nama_barang LIKE '%Plastik OPP%' OR nama_barang LIKE '%Kardus Packing%';")
+                
+                // Pastikan tabel riwayat pemakaian selalu ada
+                db.execSQL("CREATE TABLE IF NOT EXISTS riwayat_pemakaian_bahan (id_pemakaian INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, tanggal TEXT NOT NULL, id_barang INTEGER NOT NULL, nama_barang TEXT NOT NULL, jenis_koreksi TEXT NOT NULL, nilai_perubahan TEXT NOT NULL, keterangan TEXT NOT NULL DEFAULT '');")
             }
         }
     }

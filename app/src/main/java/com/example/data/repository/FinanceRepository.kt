@@ -15,6 +15,7 @@ import com.example.data.model.RiwayatPemakaianBahan
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
 
 class FinanceRepository(
     private val financeDao: FinanceDao,
@@ -36,8 +37,20 @@ class FinanceRepository(
     val allPelanggan: Flow<List<MasterPelanggan>> = financeDao.getAllPelangganFlow()
     val allSatuanHarga: Flow<List<MasterSatuanHarga>> = financeDao.getAllSatuanHargaFlow()
     val allInventaris: Flow<List<InventarisBahanBaku>> = financeDao.getAllInventarisFlow()
+        .catch { e ->
+            Log.e("FinanceRepository", "Error reading allInventaris: ${e.message}")
+            emit(emptyList())
+        }
     val allBelanjaInventaris: Flow<List<TransaksiBelanjaInventaris>> = financeDao.getAllBelanjaInventarisFlow()
+        .catch { e ->
+            Log.e("FinanceRepository", "Error reading allBelanjaInventaris: ${e.message}")
+            emit(emptyList())
+        }
     val allPemakaianBahan: Flow<List<RiwayatPemakaianBahan>> = financeDao.getAllPemakaianBahanFlow()
+        .catch { e ->
+            Log.e("FinanceRepository", "Error reading allPemakaianBahan: ${e.message}")
+            emit(emptyList())
+        }
 
     fun getOrdersByDateRangeFlow(startDate: String, endDate: String): Flow<List<TransaksiOrderMasuk>> {
         return financeDao.getOrdersByDateRangeFlow(startDate, endDate)
@@ -125,12 +138,45 @@ class FinanceRepository(
         return finalId
     }
 
+    suspend fun updateMutation(mutation: MutasiManualKeluarMasuk) {
+        financeDao.updateMutation(mutation)
+        try {
+            syncManager?.syncMutationToCloud(mutation)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Mutation cloud sync notice: ${e.message}")
+        }
+    }
+
     suspend fun deleteMutation(mutation: MutasiManualKeluarMasuk) {
         financeDao.deleteMutation(mutation)
         try {
             syncManager?.deleteMutationFromCloud(mutation.idMutasi)
         } catch (e: Throwable) {
             Log.i("FinanceRepository", "Mutation cloud delete notice: ${e.message}")
+        }
+    }
+
+    suspend fun getAllMutationsDirect(): List<MutasiManualKeluarMasuk> {
+        return financeDao.getAllMutationsDirect()
+    }
+
+    suspend fun deleteAuditMutations(
+        auditId: String,
+        fallbackNote: String = "",
+        secondaryFallbackNote: String = ""
+    ) {
+        try {
+            val all = financeDao.getAllMutationsDirect()
+            val toDelete = all.filter { mut ->
+                (auditId.isNotBlank() && mut.keterangan.contains("[AUDIT_ID:$auditId]")) ||
+                (fallbackNote.isNotBlank() && mut.keterangan.contains("Audit Selisih Kas") && mut.keterangan.contains(fallbackNote)) ||
+                (secondaryFallbackNote.isNotBlank() && mut.keterangan.contains("Audit Selisih Kas") && mut.keterangan.contains(secondaryFallbackNote))
+            }
+            toDelete.forEach { mut ->
+                deleteMutation(mut)
+            }
+        } catch (e: Throwable) {
+            Log.e("FinanceRepository", "Error deleting audit mutations: ${e.message}")
         }
     }
 
@@ -253,35 +299,106 @@ class FinanceRepository(
 
     // Inventaris & Aset Bahan Baku
     suspend fun insertInventaris(item: InventarisBahanBaku): Long {
-        return financeDao.insertInventaris(item)
+        val rowId = financeDao.insertInventaris(item)
+        val finalId = if (item.idBarang == 0) rowId.toInt() else item.idBarang
+        val updatedItem = item.copy(idBarang = finalId)
+        try {
+            syncManager?.syncInventarisToCloud(updatedItem)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Inventaris cloud sync notice: ${e.message}")
+        }
+        return rowId
     }
 
     suspend fun updateInventaris(item: InventarisBahanBaku) {
         financeDao.updateInventaris(item)
+        try {
+            syncManager?.syncInventarisToCloud(item)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Inventaris cloud update notice: ${e.message}")
+        }
     }
 
     suspend fun deleteInventaris(item: InventarisBahanBaku) {
         financeDao.deleteInventaris(item)
+        try {
+            syncManager?.deleteInventarisFromCloud(item.idBarang)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Inventaris cloud delete notice: ${e.message}")
+        }
     }
 
     suspend fun cleanSampleInventaris() {
         financeDao.cleanSampleInventaris()
+        try {
+            syncManager?.cleanSampleInventarisFromCloud()
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Inventaris clean sample cloud notice: ${e.message}")
+        }
     }
 
     suspend fun insertBelanjaInventaris(item: TransaksiBelanjaInventaris): Long {
-        return financeDao.insertBelanjaInventaris(item)
+        val rowId = financeDao.insertBelanjaInventaris(item)
+        val finalId = if (item.idBelanja == 0) rowId.toInt() else item.idBelanja
+        val updatedItem = item.copy(idBelanja = finalId)
+        try {
+            syncManager?.syncBelanjaInventarisToCloud(updatedItem)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Belanja cloud sync notice: ${e.message}")
+        }
+        return rowId
+    }
+
+    suspend fun getAllBelanjaInventarisDirect(): List<TransaksiBelanjaInventaris> {
+        return financeDao.getAllBelanjaInventarisDirect()
+    }
+
+    suspend fun updateBelanjaInventaris(item: TransaksiBelanjaInventaris) {
+        financeDao.updateBelanjaInventaris(item)
+        try {
+            syncManager?.syncBelanjaInventarisToCloud(item)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Belanja cloud update notice: ${e.message}")
+        }
     }
 
     suspend fun deleteBelanjaInventaris(item: TransaksiBelanjaInventaris) {
         financeDao.deleteBelanjaInventaris(item)
+        try {
+            syncManager?.deleteBelanjaInventarisFromCloud(item.idBelanja)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Belanja cloud delete notice: ${e.message}")
+        }
+    }
+
+    suspend fun deleteBelanjaInventarisById(idBelanja: Int) {
+        financeDao.deleteBelanjaInventarisById(idBelanja)
+        try {
+            syncManager?.deleteBelanjaInventarisFromCloud(idBelanja)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Belanja cloud delete by id notice: ${e.message}")
+        }
     }
 
     suspend fun insertPemakaianBahan(item: RiwayatPemakaianBahan): Long {
-        return financeDao.insertPemakaianBahan(item)
+        val rowId = financeDao.insertPemakaianBahan(item)
+        val finalId = if (item.idPemakaian == 0) rowId.toInt() else item.idPemakaian
+        val updatedItem = item.copy(idPemakaian = finalId)
+        try {
+            syncManager?.syncPemakaianBahanToCloud(updatedItem)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Pemakaian cloud sync notice: ${e.message}")
+        }
+        return rowId
     }
 
     suspend fun deletePemakaianBahan(item: RiwayatPemakaianBahan) {
         financeDao.deletePemakaianBahan(item)
+        try {
+            syncManager?.deletePemakaianBahanFromCloud(item.idPemakaian)
+        } catch (e: Throwable) {
+            Log.i("FinanceRepository", "Pemakaian cloud delete notice: ${e.message}")
+        }
     }
 
     suspend fun syncAllToCloud() {

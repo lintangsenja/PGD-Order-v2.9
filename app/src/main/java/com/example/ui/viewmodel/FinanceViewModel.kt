@@ -423,12 +423,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
                 // 2. Calculate Mutasi Masuk and Mutasi Keluar
                 val mutasiMasuk = mutations.filter {
-                    (it.jenisMutasi == "Uang Masuk" && it.idAkun == account.idAkun) ||
+                    ((it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
                 }.sumOf { it.nominal }
 
                 val mutasiKeluar = mutations.filter {
-                    (it.jenisMutasi == "Uang Keluar" && it.idAkun == account.idAkun) ||
+                    ((it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
                 }.sumOf { it.nominal }
 
@@ -541,7 +541,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
                 // Mutasi Masuk: Uang Masuk ke akun ini + Pindah Saldo yang masuk ke akun ini (idAkunTujuan)
                 val mutasiMasuk = filteredMuts.filter {
-                    (it.jenisMutasi == "Uang Masuk" && it.idAkun == account.idAkun) ||
+                    ((it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
                 }.sumOf { it.nominal }
 
@@ -551,7 +551,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
                 // Mutasi Keluar: Uang Keluar dari akun ini + Pindah Saldo keluar dari akun ini (idAkun)
                 val keluarRiil = filteredMuts.filter {
-                    (it.jenisMutasi == "Uang Keluar" && it.idAkun == account.idAkun) ||
+                    ((it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
                 }.sumOf { it.nominal }
 
@@ -689,11 +689,16 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     ) {
         viewModelScope.launch {
             val finalWaktu = waktu ?: SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            val normalizedJenis = when {
+                jenis.equals("Masuk", ignoreCase = true) || jenis.equals("Uang Masuk", ignoreCase = true) -> "Uang Masuk"
+                jenis.equals("Keluar", ignoreCase = true) || jenis.equals("Uang Keluar", ignoreCase = true) -> "Uang Keluar"
+                else -> jenis
+            }
             val mutation = MutasiManualKeluarMasuk(
                 idMutasi = idMutasi,
                 tanggalMutasi = tanggal,
                 idAkun = idAkun,
-                jenisMutasi = jenis,
+                jenisMutasi = normalizedJenis,
                 nominal = nominal,
                 keterangan = keterangan,
                 idAkunTujuan = idAkunTujuan,
@@ -703,16 +708,147 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // Eksekusi penyesuaian audit kas langsung ke pos dompet secara nyata di database
+    fun applyAuditAdjustment(
+        auditId: String,
+        auditNote: String,
+        adjustments: List<Triple<Int, String, Double>>, // idAkun, namaAkun, delta
+        tanggal: String = getTodayString(),
+        oldAuditNote: String = ""
+    ) {
+        viewModelScope.launch {
+            // Bersihkan mutasi lama terkait audit ini jika ada (agar tidak dobel/duplikasi)
+            repository.deleteAuditMutations(
+                auditId = auditId,
+                fallbackNote = auditNote,
+                secondaryFallbackNote = oldAuditNote
+            )
+
+            val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            adjustments.forEach { (idAkun, _, delta) ->
+                if (delta != 0.0) {
+                    val jenis = if (delta > 0) "Uang Masuk" else "Uang Keluar"
+                    val nominal = kotlin.math.abs(delta)
+                    val prefixKet = if (delta > 0) "Surplus" else "Defisit"
+                    val ket = "[AUDIT_ID:$auditId] Audit Selisih Kas ($prefixKet): ${auditNote.ifBlank { "Penyesuaian fisik kas mandiri" }}"
+                    val mutation = MutasiManualKeluarMasuk(
+                        tanggalMutasi = tanggal,
+                        idAkun = idAkun,
+                        jenisMutasi = jenis,
+                        nominal = nominal,
+                        keterangan = ket,
+                        waktuMutasi = timeStr
+                    )
+                    repository.insertMutation(mutation)
+                }
+            }
+        }
+    }
+
+    // Menghitung saldo murni dompet sebelum terdampak oleh penyesuaian audit sesi ini
+    fun getPureWalletBalanceBeforeAudit(
+        idAkun: Int,
+        auditId: String,
+        isAdjusted: Boolean,
+        fallbackDelta: Double = 0.0,
+        auditNote: String = ""
+    ): Double {
+        val currentAccountRow = dashboardSummary.value.rows.find { it.idAkun == idAkun }
+        val currentSystemBalance = currentAccountRow?.sisaSaldoRiil ?: 0.0
+
+        if (!isAdjusted) return currentSystemBalance
+
+        val mutations = allMutations.value
+        val linkedMutations = mutations.filter { m ->
+            m.idAkun == idAkun && (
+                (auditId.isNotBlank() && m.keterangan.contains("[AUDIT_ID:$auditId]")) ||
+                (auditNote.isNotBlank() && m.keterangan.contains("Audit Selisih Kas") && m.keterangan.contains(auditNote))
+            )
+        }
+
+        val appliedAuditDelta = if (linkedMutations.isNotEmpty()) {
+            linkedMutations.sumOf { m ->
+                if (m.jenisMutasi.equals("Uang Masuk", ignoreCase = true)) m.nominal else -m.nominal
+            }
+        } else {
+            fallbackDelta
+        }
+
+        return currentSystemBalance - appliedAuditDelta
+    }
+
+    // Rollback penyesuaian audit kas sehingga saldo dompet dan total kas fisik beranda kembali seimbang
+    fun rollbackAuditAdjustment(auditId: String, fallbackNote: String = "") {
+        viewModelScope.launch {
+            repository.deleteAuditMutations(auditId, fallbackNote = fallbackNote)
+        }
+    }
+
     fun updateMutation(mutation: MutasiManualKeluarMasuk) {
         viewModelScope.launch {
             repository.insertMutation(mutation)
         }
     }
 
-    // Delete mutation
+    private fun formatCurrency(amount: Double): String {
+        return "Rp " + String.format(Locale.GERMANY, "%,.0f", amount)
+    }
+
+    // Delete mutation with bidirectional cascade sync to Belanja Inventaris and InventarisBahanBaku
     fun deleteMutation(mutation: MutasiManualKeluarMasuk) {
         viewModelScope.launch {
             repository.deleteMutation(mutation)
+
+            // Cascade: periksa apakah mutasi ini berasal dari transaksi belanja inventaris
+            try {
+                val belanjaList = repository.getAllBelanjaInventarisDirect()
+
+                // Cek ID belanja dari tag [BELANJA_INV:X]
+                val taggedId = if (mutation.keterangan.contains("[BELANJA_INV:")) {
+                    mutation.keterangan.substringAfter("[BELANJA_INV:").substringBefore("]").trim().toIntOrNull()
+                } else null
+
+                val matchingBelanja = if (taggedId != null) {
+                    belanjaList.find { it.idBelanja == taggedId }
+                } else {
+                    // Fallback: pencocokan berdasarkan akun, nominal nota/uang keluar, dan kata kunci belanja/nama barang
+                    belanjaList.find { b ->
+                        b.idAkunKas == mutation.idAkun &&
+                        (Math.abs(b.uangKeluarDompet - mutation.nominal) < 1.0 || Math.abs(b.realisasiNotaToko - mutation.nominal) < 1.0) &&
+                        (mutation.keterangan.contains(b.namaBarang, ignoreCase = true) || mutation.keterangan.contains("Belanja", ignoreCase = true))
+                    }
+                }
+
+                if (matchingBelanja != null) {
+                    // 1. Hapus riwayat belanja inventaris
+                    repository.deleteBelanjaInventaris(matchingBelanja)
+
+                    // 2. Rollback stok fisik di Stok & Valuasi
+                    if (matchingBelanja.jumlahTambahStok > 0.0) {
+                        val invList = allInventaris.value
+                        val targetItem = (if (matchingBelanja.idBarangTerkait != null && matchingBelanja.idBarangTerkait > 0) {
+                            invList.find { it.idBarang == matchingBelanja.idBarangTerkait }
+                        } else null) ?: invList.find { it.namaBarang.equals(matchingBelanja.namaBarang.trim(), ignoreCase = true) }
+
+                        if (targetItem != null) {
+                            val newStok = (targetItem.stokUtuh - matchingBelanja.jumlahTambahStok).coerceAtLeast(0.0)
+                            repository.updateInventaris(targetItem.copy(stokUtuh = newStok, updatedAt = getTodayString()))
+                            repository.insertPemakaianBahan(
+                                RiwayatPemakaianBahan(
+                                    tanggal = getTodayString(),
+                                    idBarang = targetItem.idBarang,
+                                    namaBarang = targetItem.namaBarang,
+                                    jenisKoreksi = "Rollback Hapus Mutasi",
+                                    nilaiPerubahan = "-${matchingBelanja.jumlahTambahStok} ${targetItem.satuanUtuh}",
+                                    keterangan = "Batal belanja via hapus mutasi kas (Rp ${formatCurrency(mutation.nominal)})"
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("FinanceViewModel", "Error cascading delete mutation: ${e.message}")
+            }
         }
     }
 
@@ -818,12 +954,97 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         catatanSelisih: String,
         idBarangTerkait: Int?,
         namaBarang: String,
+        kategoriBarang: String = "",
         jumlahTambahStok: Double,
         satuan: String,
         potongKasOtomatis: Boolean
     ) {
         viewModelScope.launch {
-            val selisih = uangKeluarDompet - realisasiNotaToko
+            val cleanNamaBarang = namaBarang.trim().ifBlank { "Bahan Baku" }
+            val selisih = (uangKeluarDompet - realisasiNotaToko).coerceAtLeast(0.0)
+
+            // 1. Integrasi langsung ke Stok & Valuasi (inventaris_bahan_baku)
+            val invList = allInventaris.value
+
+            var targetBarangId = idBarangTerkait
+            val existing = (if (targetBarangId != null && targetBarangId > 0) {
+                invList.find { it.idBarang == targetBarangId }
+            } else null) ?: invList.find { it.namaBarang.equals(cleanNamaBarang, ignoreCase = true) }
+
+            val effectiveSatuan = satuan.trim().ifBlank {
+                existing?.satuanUtuh ?: when {
+                    namaAkunKas.contains("Kertas", ignoreCase = true) || cleanNamaBarang.contains("Kertas", ignoreCase = true) || cleanNamaBarang.contains("HVS", ignoreCase = true) || cleanNamaBarang.contains("SIDU", ignoreCase = true) -> "Rim"
+                    namaAkunKas.contains("Tinta", ignoreCase = true) || cleanNamaBarang.contains("Tinta", ignoreCase = true) -> "Botol"
+                    namaAkunKas.contains("Pengemasan", ignoreCase = true) || cleanNamaBarang.contains("Plastik", ignoreCase = true) || cleanNamaBarang.contains("Kardus", ignoreCase = true) -> "Pack"
+                    else -> "Pcs"
+                }
+            }
+
+            val effectiveKategori = when {
+                kategoriBarang.isNotBlank() -> kategoriBarang
+                existing != null -> existing.kategori
+                namaAkunKas.contains("Kertas", ignoreCase = true) || cleanNamaBarang.contains("Kertas", ignoreCase = true) || cleanNamaBarang.contains("HVS", ignoreCase = true) || cleanNamaBarang.contains("SIDU", ignoreCase = true) -> "Kertas"
+                namaAkunKas.contains("Tinta", ignoreCase = true) || cleanNamaBarang.contains("Tinta", ignoreCase = true) -> "Tinta"
+                namaAkunKas.contains("Pengemasan", ignoreCase = true) || cleanNamaBarang.contains("Plastik", ignoreCase = true) || cleanNamaBarang.contains("Kardus", ignoreCase = true) -> "Plastik & Pengemasan"
+                else -> "Operasional & Lainnya"
+            }
+
+            val effectiveQty = if (jumlahTambahStok > 0.0) jumlahTambahStok else 1.0
+            val hargaPerUnit = if (effectiveQty > 0.0 && realisasiNotaToko > 0.0) {
+                realisasiNotaToko / effectiveQty
+            } else if (existing != null) {
+                existing.hargaSatuanUtuh
+            } else {
+                realisasiNotaToko
+            }
+
+            if (existing != null) {
+                val newStok = existing.stokUtuh + effectiveQty
+                val updatedItem = existing.copy(
+                    stokUtuh = newStok,
+                    hargaSatuanUtuh = if (hargaPerUnit > 0.0) hargaPerUnit else existing.hargaSatuanUtuh,
+                    satuanUtuh = if (existing.satuanUtuh.isNotBlank()) existing.satuanUtuh else effectiveSatuan,
+                    updatedAt = tanggal
+                )
+                repository.updateInventaris(updatedItem)
+                targetBarangId = existing.idBarang
+                repository.insertPemakaianBahan(
+                    RiwayatPemakaianBahan(
+                        tanggal = tanggal,
+                        idBarang = existing.idBarang,
+                        namaBarang = existing.namaBarang,
+                        jenisKoreksi = "Tambah Stok Belanja",
+                        nilaiPerubahan = "+$effectiveQty ${updatedItem.satuanUtuh}",
+                        keterangan = "Pembelian dari $namaAkunKas (Nota: ${formatCurrency(realisasiNotaToko)})"
+                    )
+                )
+            } else {
+                val newItem = InventarisBahanBaku(
+                    idBarang = 0,
+                    namaBarang = cleanNamaBarang,
+                    kategori = effectiveKategori,
+                    stokUtuh = effectiveQty,
+                    satuanUtuh = effectiveSatuan,
+                    hargaSatuanUtuh = hargaPerUnit,
+                    persentaseKondisi = 100,
+                    catatan = "Pembelian awal via $namaAkunKas",
+                    updatedAt = tanggal
+                )
+                val newId = repository.insertInventaris(newItem).toInt()
+                targetBarangId = newId
+                repository.insertPemakaianBahan(
+                    RiwayatPemakaianBahan(
+                        tanggal = tanggal,
+                        idBarang = newId,
+                        namaBarang = cleanNamaBarang,
+                        jenisKoreksi = "Stok Awal Belanja",
+                        nilaiPerubahan = "+$effectiveQty $effectiveSatuan",
+                        keterangan = "Pembelian baru dari $namaAkunKas (Nota: ${formatCurrency(realisasiNotaToko)})"
+                    )
+                )
+            }
+
+            // 2. Simpan Transaksi Belanja Inventaris
             val record = TransaksiBelanjaInventaris(
                 tanggal = tanggal,
                 idAkunKas = idAkunKas,
@@ -832,24 +1053,27 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 realisasiNotaToko = realisasiNotaToko,
                 selisihUang = selisih,
                 catatanSelisih = catatanSelisih,
-                idBarangTerkait = idBarangTerkait,
-                namaBarang = namaBarang,
-                jumlahTambahStok = jumlahTambahStok,
-                satuan = satuan,
+                idBarangTerkait = targetBarangId,
+                namaBarang = cleanNamaBarang,
+                jumlahTambahStok = effectiveQty,
+                satuan = effectiveSatuan,
                 potongKasOtomatis = potongKasOtomatis
             )
-            repository.insertBelanjaInventaris(record)
+            val generatedBelanjaId = repository.insertBelanjaInventaris(record).toInt()
 
-            // Catat uang keluar di kas utama jika dicentang
+            // 3. Potong Kas Otomatis & Catat Mutasi Kas Keluar
             if (potongKasOtomatis && uangKeluarDompet > 0.0) {
                 val now = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                val tagBelanja = "[BELANJA_INV:$generatedBelanjaId]"
                 val ket = buildString {
-                    append("Belanja Inventaris: $namaBarang (Nota: Rp ${String.format(Locale.GERMANY, "%,.0f", realisasiNotaToko)})")
-                    if (selisih > 0.0 && catatanSelisih.isNotBlank()) {
-                        append(" | Sisa Rp ${String.format(Locale.GERMANY, "%,.0f", selisih)}: $catatanSelisih")
-                    } else if (selisih > 0.0) {
-                        append(" | Sisa Rp ${String.format(Locale.GERMANY, "%,.0f", selisih)}")
+                    append("Belanja Inventaris: $cleanNamaBarang")
+                    if (effectiveQty > 0.0) append(" ($effectiveQty $effectiveSatuan)")
+                    append(" | Nota: ${formatCurrency(realisasiNotaToko)}")
+                    if (selisih > 0.0) {
+                        append(" | Sisa: ${formatCurrency(selisih)}")
+                        if (catatanSelisih.isNotBlank()) append(" ($catatanSelisih)")
                     }
+                    append(" $tagBelanja")
                 }
                 val mutasi = MutasiManualKeluarMasuk(
                     tanggalMutasi = tanggal,
@@ -861,93 +1085,374 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 )
                 repository.insertMutation(mutasi)
             }
+        }
+    }
 
-            // Tambah stok ke barang inventaris jika dipilih
-            if (idBarangTerkait != null && idBarangTerkait > 0 && jumlahTambahStok > 0.0) {
-                val existing = allInventaris.value.find { it.idBarang == idBarangTerkait }
-                if (existing != null) {
-                    val newStok = existing.stokUtuh + jumlahTambahStok
-                    repository.updateInventaris(existing.copy(stokUtuh = newStok, updatedAt = tanggal))
+    // Update Belanja Inventaris with synchronization of Wallet Balance, Mutation, and Stock & Valuation
+    fun updateBelanjaInventaris(
+        oldRecord: TransaksiBelanjaInventaris,
+        tanggal: String,
+        idAkunKas: Int,
+        namaAkunKas: String,
+        uangKeluarDompet: Double,
+        realisasiNotaToko: Double,
+        catatanSelisih: String,
+        idBarangTerkait: Int?,
+        namaBarang: String,
+        kategoriBarang: String = "",
+        jumlahTambahStok: Double,
+        satuan: String,
+        potongKasOtomatis: Boolean
+    ) {
+        viewModelScope.launch {
+            val cleanNamaBarang = namaBarang.trim().ifBlank { "Bahan Baku" }
+            val selisih = (uangKeluarDompet - realisasiNotaToko).coerceAtLeast(0.0)
+            val invList = allInventaris.value
+
+            // 1. Sinkronisasi Stok Fisik di Stok & Valuasi
+            val oldItem = (if (oldRecord.idBarangTerkait != null && oldRecord.idBarangTerkait > 0) {
+                invList.find { it.idBarang == oldRecord.idBarangTerkait }
+            } else null) ?: invList.find { it.namaBarang.equals(oldRecord.namaBarang.trim(), ignoreCase = true) }
+
+            var newTargetBarangId = idBarangTerkait
+            val newItem = (if (newTargetBarangId != null && newTargetBarangId > 0) {
+                invList.find { it.idBarang == newTargetBarangId }
+            } else null) ?: invList.find { it.namaBarang.equals(cleanNamaBarang, ignoreCase = true) }
+
+            val effectiveSatuan = satuan.trim().ifBlank {
+                newItem?.satuanUtuh ?: oldItem?.satuanUtuh ?: when {
+                    namaAkunKas.contains("Kertas", ignoreCase = true) || cleanNamaBarang.contains("Kertas", ignoreCase = true) || cleanNamaBarang.contains("HVS", ignoreCase = true) || cleanNamaBarang.contains("SIDU", ignoreCase = true) -> "Rim"
+                    namaAkunKas.contains("Tinta", ignoreCase = true) || cleanNamaBarang.contains("Tinta", ignoreCase = true) -> "Botol"
+                    namaAkunKas.contains("Pengemasan", ignoreCase = true) || cleanNamaBarang.contains("Plastik", ignoreCase = true) || cleanNamaBarang.contains("Kardus", ignoreCase = true) -> "Pack"
+                    else -> "Pcs"
+                }
+            }
+
+            val effectiveKategori = when {
+                kategoriBarang.isNotBlank() -> kategoriBarang
+                newItem != null -> newItem.kategori
+                oldItem != null -> oldItem.kategori
+                namaAkunKas.contains("Kertas", ignoreCase = true) || cleanNamaBarang.contains("Kertas", ignoreCase = true) -> "Kertas"
+                namaAkunKas.contains("Tinta", ignoreCase = true) || cleanNamaBarang.contains("Tinta", ignoreCase = true) -> "Tinta"
+                else -> "Operasional & Lainnya"
+            }
+
+            val newQty = if (jumlahTambahStok > 0.0) jumlahTambahStok else 1.0
+            val oldQty = oldRecord.jumlahTambahStok
+
+            if (oldItem != null && newItem != null && oldItem.idBarang == newItem.idBarang) {
+                // Barang sama: sesuaikan delta kuantitas
+                val delta = newQty - oldQty
+                val newStok = (oldItem.stokUtuh + delta).coerceAtLeast(0.0)
+                val hargaPerUnit = if (newQty > 0.0 && realisasiNotaToko > 0.0) realisasiNotaToko / newQty else oldItem.hargaSatuanUtuh
+                val updatedInv = oldItem.copy(
+                    stokUtuh = newStok,
+                    hargaSatuanUtuh = if (hargaPerUnit > 0.0) hargaPerUnit else oldItem.hargaSatuanUtuh,
+                    satuanUtuh = if (oldItem.satuanUtuh.isNotBlank()) oldItem.satuanUtuh else effectiveSatuan,
+                    updatedAt = tanggal
+                )
+                repository.updateInventaris(updatedInv)
+                newTargetBarangId = oldItem.idBarang
+
+                if (delta != 0.0) {
                     repository.insertPemakaianBahan(
                         RiwayatPemakaianBahan(
                             tanggal = tanggal,
-                            idBarang = existing.idBarang,
-                            namaBarang = existing.namaBarang,
-                            jenisKoreksi = "Tambah Stok Belanja",
-                            nilaiPerubahan = "+$jumlahTambahStok ${existing.satuanUtuh}",
-                            keterangan = "Pembelian dari $namaAkunKas"
+                            idBarang = oldItem.idBarang,
+                            namaBarang = oldItem.namaBarang,
+                            jenisKoreksi = "Penyesuaian Edit Belanja",
+                            nilaiPerubahan = "${if (delta > 0) "+$delta" else "$delta"} ${updatedInv.satuanUtuh}",
+                            keterangan = "Edit kuantitas belanja dari $oldQty menjadi $newQty"
+                        )
+                    )
+                }
+            } else {
+                // Barang berbeda: rollback barang lama, tambahkan ke barang baru
+                if (oldItem != null && oldQty > 0.0) {
+                    val rolledBackStok = (oldItem.stokUtuh - oldQty).coerceAtLeast(0.0)
+                    repository.updateInventaris(oldItem.copy(stokUtuh = rolledBackStok, updatedAt = getTodayString()))
+                    repository.insertPemakaianBahan(
+                        RiwayatPemakaianBahan(
+                            tanggal = getTodayString(),
+                            idBarang = oldItem.idBarang,
+                            namaBarang = oldItem.namaBarang,
+                            jenisKoreksi = "Rollback Edit Belanja",
+                            nilaiPerubahan = "-$oldQty ${oldItem.satuanUtuh}",
+                            keterangan = "Pengalihan barang belanja ke $cleanNamaBarang"
+                        )
+                    )
+                }
+
+                if (newItem != null) {
+                    val newStok = newItem.stokUtuh + newQty
+                    val hargaPerUnit = if (newQty > 0.0 && realisasiNotaToko > 0.0) realisasiNotaToko / newQty else newItem.hargaSatuanUtuh
+                    val updatedInv = newItem.copy(
+                        stokUtuh = newStok,
+                        hargaSatuanUtuh = if (hargaPerUnit > 0.0) hargaPerUnit else newItem.hargaSatuanUtuh,
+                        satuanUtuh = if (newItem.satuanUtuh.isNotBlank()) newItem.satuanUtuh else effectiveSatuan,
+                        updatedAt = tanggal
+                    )
+                    repository.updateInventaris(updatedInv)
+                    newTargetBarangId = newItem.idBarang
+                    repository.insertPemakaianBahan(
+                        RiwayatPemakaianBahan(
+                            tanggal = tanggal,
+                            idBarang = newItem.idBarang,
+                            namaBarang = newItem.namaBarang,
+                            jenisKoreksi = "Tambah Stok Belanja (Edit)",
+                            nilaiPerubahan = "+$newQty ${updatedInv.satuanUtuh}",
+                            keterangan = "Pembelian hasil edit riwayat belanja via $namaAkunKas"
+                        )
+                    )
+                } else {
+                    val hargaPerUnit = if (newQty > 0.0 && realisasiNotaToko > 0.0) realisasiNotaToko / newQty else realisasiNotaToko
+                    val newBarang = InventarisBahanBaku(
+                        idBarang = 0,
+                        namaBarang = cleanNamaBarang,
+                        kategori = effectiveKategori,
+                        stokUtuh = newQty,
+                        satuanUtuh = effectiveSatuan,
+                        hargaSatuanUtuh = hargaPerUnit,
+                        persentaseKondisi = 100,
+                        catatan = "Pembelian via edit riwayat belanja $namaAkunKas",
+                        updatedAt = tanggal
+                    )
+                    val insertedId = repository.insertInventaris(newBarang).toInt()
+                    newTargetBarangId = insertedId
+                    repository.insertPemakaianBahan(
+                        RiwayatPemakaianBahan(
+                            tanggal = tanggal,
+                            idBarang = insertedId,
+                            namaBarang = cleanNamaBarang,
+                            jenisKoreksi = "Stok Awal Belanja (Edit)",
+                            nilaiPerubahan = "+$newQty $effectiveSatuan",
+                            keterangan = "Bahan baru hasil edit belanja via $namaAkunKas"
                         )
                     )
                 }
             }
+
+            // 2. Sinkronisasi Mutasi Kas Dompet
+            val tagBelanja = "[BELANJA_INV:${oldRecord.idBelanja}]"
+            val now = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            val ket = buildString {
+                append("Belanja Inventaris: $cleanNamaBarang")
+                if (newQty > 0.0) append(" ($newQty $effectiveSatuan)")
+                append(" | Nota: ${formatCurrency(realisasiNotaToko)}")
+                if (selisih > 0.0) {
+                    append(" | Sisa: ${formatCurrency(selisih)}")
+                    if (catatanSelisih.isNotBlank()) append(" ($catatanSelisih)")
+                }
+                append(" $tagBelanja")
+            }
+
+            val mutations = allMutations.value
+            val existingMutasi = mutations.find { it.keterangan.contains(tagBelanja) } ?: mutations.find { m ->
+                m.jenisMutasi == "Uang Keluar" &&
+                m.idAkun == oldRecord.idAkunKas &&
+                (Math.abs(m.nominal - oldRecord.uangKeluarDompet) < 1.0 || Math.abs(m.nominal - oldRecord.realisasiNotaToko) < 1.0) &&
+                (m.keterangan.contains(oldRecord.namaBarang, ignoreCase = true) || m.keterangan.contains("Belanja", ignoreCase = true))
+            }
+
+            if (potongKasOtomatis && uangKeluarDompet > 0.0) {
+                if (existingMutasi != null) {
+                    repository.updateMutation(
+                        existingMutasi.copy(
+                            idAkun = idAkunKas,
+                            nominal = uangKeluarDompet,
+                            tanggalMutasi = tanggal,
+                            keterangan = ket
+                        )
+                    )
+                } else {
+                    repository.insertMutation(
+                        MutasiManualKeluarMasuk(
+                            tanggalMutasi = tanggal,
+                            idAkun = idAkunKas,
+                            jenisMutasi = "Uang Keluar",
+                            nominal = uangKeluarDompet,
+                            keterangan = ket,
+                            waktuMutasi = now
+                        )
+                    )
+                }
+            } else {
+                if (existingMutasi != null) {
+                    repository.deleteMutation(existingMutasi)
+                }
+            }
+
+            // 3. Update Record Transaksi Belanja
+            val updatedRecord = oldRecord.copy(
+                tanggal = tanggal,
+                idAkunKas = idAkunKas,
+                namaAkunKas = namaAkunKas,
+                uangKeluarDompet = uangKeluarDompet,
+                realisasiNotaToko = realisasiNotaToko,
+                selisihUang = selisih,
+                catatanSelisih = catatanSelisih,
+                idBarangTerkait = newTargetBarangId,
+                namaBarang = cleanNamaBarang,
+                jumlahTambahStok = newQty,
+                satuan = effectiveSatuan,
+                potongKasOtomatis = potongKasOtomatis
+            )
+            repository.updateBelanjaInventaris(updatedRecord)
         }
     }
 
+    // Delete Belanja Inventaris with cascade rollback to Mutasi Kas and Stok & Valuasi
     fun deleteBelanjaInventaris(item: TransaksiBelanjaInventaris) {
         viewModelScope.launch {
+            // 1. Hapus entri belanja inventaris
             repository.deleteBelanjaInventaris(item)
+
+            // 2. Cascade: cari dan hapus mutasi kas keluar terkait (refund saldo dompet otomatis)
+            try {
+                val mutations = allMutations.value
+                val tag = "[BELANJA_INV:${item.idBelanja}]"
+                val matchingMutasi = mutations.find { it.keterangan.contains(tag) } ?: mutations.find { m ->
+                    m.jenisMutasi == "Uang Keluar" &&
+                    m.idAkun == item.idAkunKas &&
+                    (Math.abs(m.nominal - item.uangKeluarDompet) < 1.0 || Math.abs(m.nominal - item.realisasiNotaToko) < 1.0) &&
+                    (m.keterangan.contains(item.namaBarang, ignoreCase = true) || m.keterangan.contains("Belanja", ignoreCase = true))
+                }
+
+                if (matchingMutasi != null) {
+                    repository.deleteMutation(matchingMutasi)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("FinanceViewModel", "Error deleting linked mutation: ${e.message}")
+            }
+
+            // 3. Rollback jumlah fisik barang di Stok & Valuasi
+            if (item.jumlahTambahStok > 0.0) {
+                try {
+                    val invList = allInventaris.value
+                    val targetInv = (if (item.idBarangTerkait != null && item.idBarangTerkait > 0) {
+                        invList.find { it.idBarang == item.idBarangTerkait }
+                    } else null) ?: invList.find { it.namaBarang.equals(item.namaBarang.trim(), ignoreCase = true) }
+
+                    if (targetInv != null) {
+                        val rolledBackStok = (targetInv.stokUtuh - item.jumlahTambahStok).coerceAtLeast(0.0)
+                        repository.updateInventaris(targetInv.copy(stokUtuh = rolledBackStok, updatedAt = getTodayString()))
+                        repository.insertPemakaianBahan(
+                            RiwayatPemakaianBahan(
+                                tanggal = getTodayString(),
+                                idBarang = targetInv.idBarang,
+                                namaBarang = targetInv.namaBarang,
+                                jenisKoreksi = "Rollback Hapus Belanja",
+                                nilaiPerubahan = "-${item.jumlahTambahStok} ${targetInv.satuanUtuh}",
+                                keterangan = "Pembatalan riwayat belanja ${item.namaBarang} (Refund kas dompet)"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("FinanceViewModel", "Error rolling back inventory stock: ${e.message}")
+                }
+            }
         }
     }
 
     fun koreksiStokInventaris(
-        item: InventarisBahanBaku,
-        jenisKoreksi: String, // "Kurangi Satuan Utuh", "Ubah Persentase", "Tambah Stok Fisik"
-        jumlahPerubahan: Double,
-        persentaseBaru: Int,
-        keterangan: String,
+        item: InventarisBahanBaku?,
+        jenisKoreksi: String?,
+        jumlahPerubahan: Double?,
+        persentaseBaru: Int?,
+        keterangan: String?,
         tanggal: String = getTodayString()
     ) {
+        if (item == null) return
         viewModelScope.launch {
-            when (jenisKoreksi) {
-                "Kurangi Satuan Utuh" -> {
-                    val newStok = maxOf(0.0, item.stokUtuh - jumlahPerubahan)
-                    repository.updateInventaris(item.copy(stokUtuh = newStok, updatedAt = tanggal))
-                    repository.insertPemakaianBahan(
-                        RiwayatPemakaianBahan(
-                            tanggal = tanggal,
-                            idBarang = item.idBarang,
-                            namaBarang = item.namaBarang,
-                            jenisKoreksi = "Kurangi Satuan Utuh",
-                            nilaiPerubahan = "-$jumlahPerubahan ${item.satuanUtuh}",
-                            keterangan = keterangan.ifBlank { "Pemakaian operasional" }
+            try {
+                val safeJenisKoreksi = (jenisKoreksi ?: "Pemakaian Lembaran").trim()
+                val safeJumlah = jumlahPerubahan ?: 0.0
+                val safePersentase = persentaseBaru ?: item.persentaseKondisi
+                val safeKeterangan = (keterangan ?: "").trim()
+                val safeTanggal = if (tanggal.isNullOrBlank()) getTodayString() else tanggal
+                val safeItemNama = item.namaBarang.ifBlank { "Bahan Baku" }
+                val safeSatuan = item.satuanUtuh.ifBlank { "Pcs" }
+
+                when (safeJenisKoreksi) {
+                    "Pemakaian Lembaran", "Pemakaian Parsial" -> {
+                        val newStok = maxOf(0.0, item.stokUtuh - safeJumlah)
+                        repository.updateInventaris(item.copy(stokUtuh = newStok, updatedAt = safeTanggal))
+                        val formattedPerubahan = InventarisBahanBaku.formatStokGabungan(safeJumlah, safeSatuan)
+                        val penurunanValuasi = (safeJumlah * (item.persentaseKondisi / 100.0) * item.hargaSatuanUtuh).toLong()
+                        repository.insertPemakaianBahan(
+                            RiwayatPemakaianBahan(
+                                tanggal = safeTanggal,
+                                idBarang = item.idBarang,
+                                namaBarang = safeItemNama,
+                                jenisKoreksi = "Pemakaian Lembaran",
+                                nilaiPerubahan = "-$formattedPerubahan (-Rp ${String.format(java.util.Locale.US, "%,d", penurunanValuasi).replace(',', '.')})",
+                                keterangan = safeKeterangan.ifBlank { "Pemakaian sebagian operasional" }
+                            )
                         )
-                    )
-                }
-                "Ubah Persentase" -> {
-                    val prev = item.persentaseKondisi
-                    repository.updateInventaris(item.copy(persentaseKondisi = persentaseBaru, updatedAt = tanggal))
-                    repository.insertPemakaianBahan(
-                        RiwayatPemakaianBahan(
-                            tanggal = tanggal,
-                            idBarang = item.idBarang,
-                            namaBarang = item.namaBarang,
-                            jenisKoreksi = "Ubah Persentase",
-                            nilaiPerubahan = "$prev% -> $persentaseBaru%",
-                            keterangan = keterangan.ifBlank { "Koreksi sisa pemakaian" }
+                    }
+                    "Kurangi Satuan Utuh" -> {
+                        val newStok = maxOf(0.0, item.stokUtuh - safeJumlah)
+                        repository.updateInventaris(item.copy(stokUtuh = newStok, updatedAt = safeTanggal))
+                        val penurunanValuasi = (safeJumlah * (item.persentaseKondisi / 100.0) * item.hargaSatuanUtuh).toLong()
+                        val unitStr = if (safeJumlah % 1.0 == 0.0) String.format(java.util.Locale.US, "%.0f", safeJumlah) else String.format(java.util.Locale.US, "%.2f", safeJumlah)
+                        repository.insertPemakaianBahan(
+                            RiwayatPemakaianBahan(
+                                tanggal = safeTanggal,
+                                idBarang = item.idBarang,
+                                namaBarang = safeItemNama,
+                                jenisKoreksi = "Kurangi Satuan Utuh",
+                                nilaiPerubahan = "-$unitStr $safeSatuan (-Rp ${String.format(java.util.Locale.US, "%,d", penurunanValuasi).replace(',', '.')})",
+                                keterangan = safeKeterangan.ifBlank { "Pengurangan stok fisik" }
+                            )
                         )
-                    )
-                }
-                "Tambah Stok Fisik" -> {
-                    val newStok = item.stokUtuh + jumlahPerubahan
-                    repository.updateInventaris(item.copy(stokUtuh = newStok, updatedAt = tanggal))
-                    repository.insertPemakaianBahan(
-                        RiwayatPemakaianBahan(
-                            tanggal = tanggal,
-                            idBarang = item.idBarang,
-                            namaBarang = item.namaBarang,
-                            jenisKoreksi = "Tambah Stok Fisik",
-                            nilaiPerubahan = "+$jumlahPerubahan ${item.satuanUtuh}",
-                            keterangan = keterangan.ifBlank { "Penyesuaian stok gudang" }
+                    }
+                    "Ubah Persentase" -> {
+                        val prev = item.persentaseKondisi
+                        repository.updateInventaris(item.copy(persentaseKondisi = safePersentase, updatedAt = safeTanggal))
+                        val selisihValuasi = ((safePersentase - prev) / 100.0 * item.stokUtuh * item.hargaSatuanUtuh).toLong()
+                        val diffValStr = if (selisihValuasi < 0) "-Rp ${String.format(java.util.Locale.US, "%,d", -selisihValuasi).replace(',', '.')}" else "+Rp ${String.format(java.util.Locale.US, "%,d", selisihValuasi).replace(',', '.')}"
+                        repository.insertPemakaianBahan(
+                            RiwayatPemakaianBahan(
+                                tanggal = safeTanggal,
+                                idBarang = item.idBarang,
+                                namaBarang = safeItemNama,
+                                jenisKoreksi = "Ubah Persentase",
+                                nilaiPerubahan = "$prev% -> $safePersentase% ($diffValStr)",
+                                keterangan = safeKeterangan.ifBlank { "Koreksi sisa pemakaian" }
+                            )
                         )
-                    )
+                    }
+                    "Tambah Stok Fisik" -> {
+                        val newStok = item.stokUtuh + safeJumlah
+                        repository.updateInventaris(item.copy(stokUtuh = newStok, updatedAt = safeTanggal))
+                        val kenaikanValuasi = (safeJumlah * (item.persentaseKondisi / 100.0) * item.hargaSatuanUtuh).toLong()
+                        val unitStr = if (safeJumlah % 1.0 == 0.0) String.format(java.util.Locale.US, "%.0f", safeJumlah) else String.format(java.util.Locale.US, "%.2f", safeJumlah)
+                        repository.insertPemakaianBahan(
+                            RiwayatPemakaianBahan(
+                                tanggal = safeTanggal,
+                                idBarang = item.idBarang,
+                                namaBarang = safeItemNama,
+                                jenisKoreksi = "Tambah Stok Fisik",
+                                nilaiPerubahan = "+$unitStr $safeSatuan (+Rp ${String.format(java.util.Locale.US, "%,d", kenaikanValuasi).replace(',', '.')})",
+                                keterangan = safeKeterangan.ifBlank { "Penyesuaian stok gudang" }
+                            )
+                        )
+                    }
                 }
+            } catch (e: Throwable) {
+                android.util.Log.e("FinanceViewModel", "Error executing koreksiStokInventaris: ${e.message}", e)
             }
         }
     }
 
-    fun deletePemakaianBahan(item: RiwayatPemakaianBahan) {
+    fun deletePemakaianBahan(item: RiwayatPemakaianBahan?) {
+        if (item == null) return
         viewModelScope.launch {
-            repository.deletePemakaianBahan(item)
+            try {
+                repository.deletePemakaianBahan(item)
+            } catch (e: Exception) {
+                android.util.Log.e("FinanceViewModel", "Error deleting pemakaian bahan: ${e.message}", e)
+            }
         }
     }
 

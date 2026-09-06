@@ -118,14 +118,14 @@ object ReportExportManager {
             }
 
             val mutasiMasuk = mutations.filter {
-                (it.jenisMutasi == "Uang Masuk" && it.idAkun == account.idAkun) ||
+                ((it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                 (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
             }.sumOf { it.nominal }
 
             val totalMasuk = masukPlotting + mutasiMasuk
 
             val keluarRiil = mutations.filter {
-                (it.jenisMutasi == "Uang Keluar" && it.idAkun == account.idAkun) ||
+                ((it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                 (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
             }.sumOf { it.nominal }
 
@@ -233,8 +233,8 @@ object ReportExportManager {
 
         val totalUnits = orders.sumOf { it.qtyOrder }
         val totalOmzet = orders.sumOf { it.qtyOrder.toDouble() * it.hargaSatuan }
-        val totalMutationOut = mutations.filter { it.jenisMutasi == "Uang Keluar" }.sumOf { it.nominal }
-        val totalMutationIn = mutations.filter { it.jenisMutasi == "Uang Masuk" }.sumOf { it.nominal }
+        val totalMutationOut = mutations.filter { it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true) }.sumOf { it.nominal }
+        val totalMutationIn = mutations.filter { it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true) }.sumOf { it.nominal }
         val grandTotalMasukPlotting = posItems.sumOf { it.totalMasukPlotting }
         val grandTotalKeluarRiil = posItems.sumOf { it.totalKeluarRiil }
         val grandTotalSisaRiil = posItems.sumOf { it.sisaSaldo }
@@ -953,8 +953,8 @@ object ReportExportManager {
 
         val totalUnits = orders.sumOf { it.qtyOrder }
         val totalOmzet = orders.sumOf { it.qtyOrder.toDouble() * it.hargaSatuan }
-        val totalMutationOut = mutations.filter { it.jenisMutasi == "Uang Keluar" }.sumOf { it.nominal }
-        val totalMutationIn = mutations.filter { it.jenisMutasi == "Uang Masuk" }.sumOf { it.nominal }
+        val totalMutationOut = mutations.filter { it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true) }.sumOf { it.nominal }
+        val totalMutationIn = mutations.filter { it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true) }.sumOf { it.nominal }
         val grandTotalMasukPlotting = posItems.sumOf { it.totalMasukPlotting }
         val grandTotalKeluarRiil = posItems.sumOf { it.totalKeluarRiil }
         val grandTotalSisaRiil = posItems.sumOf { it.sisaSaldo }
