@@ -50,7 +50,10 @@ object ReportExportManager {
             groupingSeparator = '.'
             decimalSeparator = ','
         }
-        DecimalFormat("Rp #,##0", symbols)
+        DecimalFormat("Rp #,##0", symbols).apply {
+            maximumFractionDigits = 0
+            minimumFractionDigits = 0
+        }
     }
 
     private val numberFormat: DecimalFormat by lazy {
@@ -58,15 +61,18 @@ object ReportExportManager {
             groupingSeparator = '.'
             decimalSeparator = ','
         }
-        DecimalFormat("#,##0", symbols)
+        DecimalFormat("#,##0", symbols).apply {
+            maximumFractionDigits = 0
+            minimumFractionDigits = 0
+        }
     }
 
     fun formatRupiah(amount: Double): String {
-        return rupiahFormat.format(amount)
+        return rupiahFormat.format(kotlin.math.round(amount).toLong())
     }
 
     fun formatNumber(amount: Number): String {
-        return numberFormat.format(amount)
+        return numberFormat.format(kotlin.math.round(amount.toDouble()).toLong())
     }
 
     fun formatPercent(amount: Double): String {
@@ -93,7 +99,7 @@ object ReportExportManager {
 
         return accounts.map { account ->
             val name = account.namaAkun
-            val masukPlotting = when {
+            val rawMasukPlotting = when {
                 name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
                 name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
                 name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
@@ -116,20 +122,21 @@ object ReportExportManager {
                 }
                 else -> 0.0
             }
+            val masukPlotting = kotlin.math.round(rawMasukPlotting)
 
-            val mutasiMasuk = mutations.filter {
+            val mutasiMasuk = kotlin.math.round(mutations.filter {
                 ((it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                 (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
-            }.sumOf { it.nominal }
+            }.sumOf { it.nominal })
 
-            val totalMasuk = masukPlotting + mutasiMasuk
+            val totalMasuk = kotlin.math.round(masukPlotting + mutasiMasuk)
 
-            val keluarRiil = mutations.filter {
+            val keluarRiil = kotlin.math.round(mutations.filter {
                 ((it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                 (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
-            }.sumOf { it.nominal }
+            }.sumOf { it.nominal })
 
-            val sisa = totalMasuk - keluarRiil
+            val sisa = kotlin.math.round(totalMasuk - keluarRiil)
             val serapanPct = if (totalMasuk > 0.0) (keluarRiil / totalMasuk) * 100.0 else if (keluarRiil > 0.0) 100.0 else 0.0
 
             AllocationComparisonItem(
@@ -608,9 +615,9 @@ object ReportExportManager {
       <c r="A$rowIdx" s="$styleCtr"><v>${i + 1}</v></c>
       <c r="B$rowIdx" s="$styleTxt" t="inlineStr"><is><t>${escapeXml(item.namaAkun)}</t></is></c>
       <c r="C$rowIdx" s="$styleTxt" t="inlineStr"><is><t>${escapeXml(formulaDesc)}</t></is></c>
-      <c r="D$rowIdx" s="$styleCur"><v>${item.totalMasukPlotting}</v></c>
-      <c r="E$rowIdx" s="$styleCur"><v>${item.totalKeluarRiil}</v></c>
-      <c r="F$rowIdx" s="$styleCur"><v>${item.sisaSaldo}</v></c>
+      <c r="D$rowIdx" s="$styleCur"><v>${kotlin.math.round(item.totalMasukPlotting).toLong()}</v></c>
+      <c r="E$rowIdx" s="$styleCur"><v>${kotlin.math.round(item.totalKeluarRiil).toLong()}</v></c>
+      <c r="F$rowIdx" s="$styleCur"><v>${kotlin.math.round(item.sisaSaldo).toLong()}</v></c>
       <c r="G$rowIdx" s="$stylePct"><v>$serapanVal</v></c>
       <c r="H$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(statusSerapan)}</t></is></c>
     </row>
@@ -624,9 +631,9 @@ object ReportExportManager {
       <c r="A$rowIdx" s="14" t="inlineStr"><is><t></t></is></c>
       <c r="B$rowIdx" s="14" t="inlineStr"><is><t>TOTAL KESELURUHAN POS</t></is></c>
       <c r="C$rowIdx" s="14" t="inlineStr"><is><t>Akumulasi Seluruh Dompet</t></is></c>
-      <c r="D$rowIdx" s="15"><v>$grandMasuk</v></c>
-      <c r="E$rowIdx" s="15"><v>$grandKeluar</v></c>
-      <c r="F$rowIdx" s="15"><v>$grandSisa</v></c>
+      <c r="D$rowIdx" s="15"><v>${kotlin.math.round(grandMasuk).toLong()}</v></c>
+      <c r="E$rowIdx" s="15"><v>${kotlin.math.round(grandKeluar).toLong()}</v></c>
+      <c r="F$rowIdx" s="15"><v>${kotlin.math.round(grandSisa).toLong()}</v></c>
       <c r="G$rowIdx" s="15"><v>$totalSerapanVal</v></c>
       <c r="H$rowIdx" s="14" t="inlineStr"><is><t>Kondisi Seimbang</t></is></c>
     </row>
@@ -728,8 +735,8 @@ object ReportExportManager {
       <c r="G$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(order.kategori)}</t></is></c>
       <c r="H$rowIdx" s="$styleInt"><v>${order.qtyOrder}</v></c>
       <c r="I$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(order.satuan)}</t></is></c>
-      <c r="J$rowIdx" s="$styleCur"><v>${order.hargaSatuan}</v></c>
-      <c r="K$rowIdx" s="$styleCur"><v>$orderTotal</v></c>
+      <c r="J$rowIdx" s="$styleCur"><v>${kotlin.math.round(order.hargaSatuan).toLong()}</v></c>
+      <c r="K$rowIdx" s="$styleCur"><v>${kotlin.math.round(orderTotal).toLong()}</v></c>
       <c r="L$rowIdx" s="$styleInt"><v>${order.jumlahPlastikPengemasan}</v></c>
       <c r="M$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(order.status)}</t></is></c>
     </row>
@@ -749,7 +756,7 @@ object ReportExportManager {
       <c r="H$rowIdx" s="15"><v>$totalQty</v></c>
       <c r="I$rowIdx" s="14" t="inlineStr"><is><t>pcs</t></is></c>
       <c r="J$rowIdx" s="14" t="inlineStr"><is><t></t></is></c>
-      <c r="K$rowIdx" s="15"><v>$totalOmzet</v></c>
+      <c r="K$rowIdx" s="15"><v>${kotlin.math.round(totalOmzet).toLong()}</v></c>
       <c r="L$rowIdx" s="15"><v>$totalPlastik</v></c>
       <c r="M$rowIdx" s="14" t="inlineStr"><is><t>Selesai Terverifikasi</t></is></c>
     </row>
@@ -850,7 +857,7 @@ object ReportExportManager {
       <c r="B$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(timeDisplay)}</t></is></c>
       <c r="C$rowIdx" s="$styleTxt" t="inlineStr"><is><t>${escapeXml(srcName)}</t></is></c>
       <c r="D$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(m.jenisMutasi)}</t></is></c>
-      <c r="E$rowIdx" s="$styleCur"><v>${m.nominal}</v></c>
+      <c r="E$rowIdx" s="$styleCur"><v>${kotlin.math.round(m.nominal).toLong()}</v></c>
       <c r="F$rowIdx" s="$styleTxt" t="inlineStr"><is><t>${escapeXml(dstName)}</t></is></c>
       <c r="G$rowIdx" s="$styleTxt" t="inlineStr"><is><t>${escapeXml(m.keterangan)}</t></is></c>
     </row>
@@ -865,7 +872,7 @@ object ReportExportManager {
       <c r="B$rowIdx" s="14" t="inlineStr"><is><t></t></is></c>
       <c r="C$rowIdx" s="14" t="inlineStr"><is><t>TOTAL REALISASI PENGELUARAN MUTASI</t></is></c>
       <c r="D$rowIdx" s="14" t="inlineStr"><is><t>Keluar</t></is></c>
-      <c r="E$rowIdx" s="15"><v>$totalMutKeluar</v></c>
+      <c r="E$rowIdx" s="15"><v>${kotlin.math.round(totalMutKeluar).toLong()}</v></c>
       <c r="F$rowIdx" s="14" t="inlineStr"><is><t></t></is></c>
       <c r="G$rowIdx" s="14" t="inlineStr"><is><t>Akumulasi Pengeluaran</t></is></c>
     </row>
@@ -915,9 +922,9 @@ object ReportExportManager {
                 sb.append("""    <row r="$rowIdx" ht="20" customHeight="1">
       <c r="A$rowIdx" s="$styleCtr"><v>${i + 1}</v></c>
       <c r="B$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(a.timestamp)}</t></is></c>
-      <c r="C$rowIdx" s="$styleCur"><v>${a.saldoSistem}</v></c>
-      <c r="D$rowIdx" s="$styleCur"><v>${a.saldoFisik}</v></c>
-      <c r="E$rowIdx" s="$styleCur"><v>${a.selisih}</v></c>
+      <c r="C$rowIdx" s="$styleCur"><v>${kotlin.math.round(a.saldoSistem).toLong()}</v></c>
+      <c r="D$rowIdx" s="$styleCur"><v>${kotlin.math.round(a.saldoFisik).toLong()}</v></c>
+      <c r="E$rowIdx" s="$styleCur"><v>${kotlin.math.round(a.selisih).toLong()}</v></c>
       <c r="F$rowIdx" s="$styleCtr" t="inlineStr"><is><t>${escapeXml(statusText)}</t></is></c>
       <c r="G$rowIdx" s="$styleTxt" t="inlineStr"><is><t>${escapeXml(note)}</t></is></c>
     </row>

@@ -397,7 +397,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val name = account.namaAkun
 
                 // 1. Calculate Saldo Terplotting based on autoplotting triggers with dynamic configuration
-                val saldoTerplotting = when {
+                val rawSaldoTerplotting = when {
                     name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
                     name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
                     name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
@@ -420,24 +420,25 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     }
                     else -> 0.0 // Account like 'Me UP GpS' starts at 0 and is adjusted manually
                 }
+                val saldoTerplotting = kotlin.math.round(rawSaldoTerplotting)
 
                 // 2. Calculate Mutasi Masuk and Mutasi Keluar
-                val mutasiMasuk = mutations.filter {
+                val mutasiMasuk = kotlin.math.round(mutations.filter {
                     ((it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
-                }.sumOf { it.nominal }
+                }.sumOf { it.nominal })
 
-                val mutasiKeluar = mutations.filter {
+                val mutasiKeluar = kotlin.math.round(mutations.filter {
                     ((it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
-                }.sumOf { it.nominal }
+                }.sumOf { it.nominal })
 
                 val mutasiPenyesuain = mutasiMasuk - mutasiKeluar
 
                 // 3. Saldo Awal + Saldo Terplotting + Mutasi Masuk - Mutasi Keluar
-                val saldoAwal = account.saldoAwal
-                val totalAlokasiMasuk = saldoAwal + saldoTerplotting + mutasiMasuk
-                val sisaSaldoRiil = totalAlokasiMasuk - mutasiKeluar
+                val saldoAwal = kotlin.math.round(account.saldoAwal)
+                val totalAlokasiMasuk = kotlin.math.round(saldoAwal + saldoTerplotting + mutasiMasuk)
+                val sisaSaldoRiil = kotlin.math.round(totalAlokasiMasuk - mutasiKeluar)
 
                 AccountDashboardRow(
                     idAkun = account.idAkun,
@@ -515,7 +516,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val name = account.namaAkun
 
                 // Plotting within period (or all time if "Semua Waktu") proporsional berdasarkan uang riil yang dibayarkan
-                val masukPlotting = when {
+                val rawMasukPlotting = when {
                     name.contains("Kertas", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
                     name.contains("Tinta", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
                     name.contains("Pengemasan", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
@@ -538,25 +539,26 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     }
                     else -> 0.0
                 }
+                val masukPlotting = kotlin.math.round(rawMasukPlotting)
 
                 // Mutasi Masuk: Uang Masuk ke akun ini + Pindah Saldo yang masuk ke akun ini (idAkunTujuan)
-                val mutasiMasuk = filteredMuts.filter {
+                val mutasiMasuk = kotlin.math.round(filteredMuts.filter {
                     ((it.jenisMutasi == "Uang Masuk" || it.jenisMutasi.equals("Masuk", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkunTujuan == account.idAkun)
-                }.sumOf { it.nominal }
+                }.sumOf { it.nominal })
 
                 // Total Pemasukan / Alokasi = Saldo Awal + Alokasi Plotting Nota + Mutasi Masuk Manual
-                val saldoAwal = account.saldoAwal
-                val totalMasuk = saldoAwal + masukPlotting + mutasiMasuk
+                val saldoAwal = kotlin.math.round(account.saldoAwal)
+                val totalMasuk = kotlin.math.round(saldoAwal + masukPlotting + mutasiMasuk)
 
                 // Mutasi Keluar: Uang Keluar dari akun ini + Pindah Saldo keluar dari akun ini (idAkun)
-                val keluarRiil = filteredMuts.filter {
+                val keluarRiil = kotlin.math.round(filteredMuts.filter {
                     ((it.jenisMutasi == "Uang Keluar" || it.jenisMutasi.equals("Keluar", ignoreCase = true)) && it.idAkun == account.idAkun) ||
                     (it.jenisMutasi == "Pindah Saldo" && it.idAkun == account.idAkun)
-                }.sumOf { it.nominal }
+                }.sumOf { it.nominal })
 
                 // Sisa Saldo Riil = Total Masuk (Saldo Awal + Alokasi + Mutasi Masuk) - Mutasi Keluar
-                val sisa = totalMasuk - keluarRiil
+                val sisa = kotlin.math.round(totalMasuk - keluarRiil)
                 val serapanPct = if (totalMasuk > 0.0) (keluarRiil / totalMasuk) * 100.0 else if (keluarRiil > 0.0) 100.0 else 0.0
 
                 AllocationComparisonItem(
@@ -774,7 +776,7 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             fallbackDelta
         }
 
-        return currentSystemBalance - appliedAuditDelta
+        return kotlin.math.round(currentSystemBalance - appliedAuditDelta)
     }
 
     // Rollback penyesuaian audit kas sehingga saldo dompet dan total kas fisik beranda kembali seimbang
@@ -791,7 +793,8 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun formatCurrency(amount: Double): String {
-        return "Rp " + String.format(Locale.GERMANY, "%,.0f", amount)
+        val rounded = kotlin.math.round(amount).toLong()
+        return "Rp " + String.format(Locale.GERMANY, "%,d", rounded)
     }
 
     // Delete mutation with bidirectional cascade sync to Belanja Inventaris and InventarisBahanBaku

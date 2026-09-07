@@ -179,13 +179,17 @@ object AuditStorageHelper {
 }
 
 fun formatAuditRupiah(amount: Double): String {
+    val rounded = kotlin.math.round(amount).toLong()
     val symbols = DecimalFormatSymbols(Locale("id", "ID")).apply {
         currencySymbol = "Rp "
         groupingSeparator = '.'
         monetaryDecimalSeparator = ','
     }
-    val formatter = DecimalFormat("Rp #,##0", symbols)
-    return formatter.format(amount)
+    val formatter = DecimalFormat("Rp #,##0", symbols).apply {
+        maximumFractionDigits = 0
+        minimumFractionDigits = 0
+    }
+    return formatter.format(rounded)
 }
 
 fun parseAuditDouble(str: String): Double? {
@@ -1204,7 +1208,7 @@ fun AuditSelisihKasScreen(
                     val theme = getPosVisualTheme(row.namaAkun)
                     val currentVal = walletAdjustments[row.idAkun] ?: ""
                     val adjustmentAmount = parseAuditDouble(currentVal) ?: 0.0
-                    val projectedNewBalance = row.sisaSaldoRiil + adjustmentAmount
+                    val projectedNewBalance = kotlin.math.round(row.sisaSaldoRiil + adjustmentAmount)
                     val cleanPosName = row.namaAkun.replace("Dompet ", "")
 
                     // Find corresponding item in allocation comparison for serapan
@@ -2075,10 +2079,10 @@ fun EditAuditRecordDialog(
 
                             // Saldo Murni Dompet: Saldo sebelum alokasi audit sesi ini diterapkan
                             // Ini menghentikan bug pembacaan ganda / double counting
-                            val pureBaseBalance = currentSystemBalance - previousAuditDelta
+                            val pureBaseBalance = kotlin.math.round(currentSystemBalance - previousAuditDelta)
 
                             // Estimasi Saldo Baru: Saldo Murni + Nominal Penyesuaian saat ini
-                            val projectedBalance = pureBaseBalance + adjustmentAmount
+                            val projectedBalance = kotlin.math.round(pureBaseBalance + adjustmentAmount)
 
                             Card(
                                 shape = RoundedCornerShape(14.dp),

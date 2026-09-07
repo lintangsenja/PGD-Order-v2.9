@@ -159,26 +159,16 @@ class MainActivity : ComponentActivity() {
 fun formatAngka(value: Double): String {
     if (value.isNaN() || value.isInfinite()) return "0"
     return try {
+        val rounded = kotlin.math.round(value).toLong()
         val locale = Locale.forLanguageTag("id-ID")
-        val formatter = NumberFormat.getNumberInstance(locale)
-        val absVal = kotlin.math.abs(value)
-        if (absVal % 1.0 == 0.0) {
-            formatter.maximumFractionDigits = 0
-            formatter.minimumFractionDigits = 0
-            formatter.format(value.toLong())
-        } else {
-            formatter.maximumFractionDigits = 2
-            formatter.minimumFractionDigits = 0
-            formatter.format(value)
+        val formatter = NumberFormat.getNumberInstance(locale).apply {
+            maximumFractionDigits = 0
+            minimumFractionDigits = 0
         }
+        formatter.format(rounded)
     } catch (e: Exception) {
-        val absVal = kotlin.math.abs(value)
-        if (absVal % 1.0 == 0.0) {
-            val rounded = try { value.toLong() } catch (_: Exception) { 0L }
-            String.format(Locale.US, "%,d", rounded).replace(',', '.')
-        } else {
-            String.format(Locale.US, "%,.2f", value).replace(',', 'X').replace('.', ',').replace('X', '.')
-        }
+        val rounded = try { kotlin.math.round(value).toLong() } catch (_: Exception) { 0L }
+        String.format(Locale.US, "%,d", rounded).replace(',', '.')
     }
 }
 
@@ -1606,10 +1596,10 @@ fun PendingBayarTab(
                         }
 
                         // Alokasi Kas Berdasarkan Uang Riil yang Masuk (Autoplotting)
-                        val actualPlottedKertas = order.qtyOrder.toDouble() * kertasHpp * order.paymentRatio
-                        val actualPlottedTinta = order.qtyOrder.toDouble() * tintaHpp * order.paymentRatio
-                        val fullLabaEst = ((order.totalPendapatan - (order.qtyOrder * (kertasHpp + tintaHpp) + order.jumlahPlastikPengemasan * 300.0)).coerceAtLeast(0.0))
-                        val actualPlottedLaba = fullLabaEst * order.paymentRatio
+                        val actualPlottedKertas = kotlin.math.round(order.qtyOrder.toDouble() * kertasHpp * order.paymentRatio)
+                        val actualPlottedTinta = kotlin.math.round(order.qtyOrder.toDouble() * tintaHpp * order.paymentRatio)
+                        val fullLabaEst = kotlin.math.round((order.totalPendapatan - (order.qtyOrder * (kertasHpp + tintaHpp) + order.jumlahPlastikPengemasan * 300.0)).coerceAtLeast(0.0))
+                        val actualPlottedLaba = kotlin.math.round(fullLabaEst * order.paymentRatio)
 
                         Surface(
                             color = colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -2121,15 +2111,15 @@ fun OrderCardItem(
     val qty = order.qtyOrder.toDouble()
     val totalPendapatan = order.totalPendapatan.takeIf { it > 0.0 } ?: (qty * order.hargaSatuan)
 
-    val dynamicKertas = qty * kertasHpp
-    val dynamicTinta = qty * tintaHpp
-    val dynamicPengemasan = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
-    val dynamicWaste = wastePct * totalPendapatan
-    val dynamicTenagaKerja = tenagaKerjaPct * totalPendapatan
-    val dynamicListrik = listrikPct * totalPendapatan
-    val dynamicMaintenance = maintenancePct * totalPendapatan
-    val dynamicTotalModal = dynamicKertas + dynamicTinta + dynamicPengemasan + dynamicWaste + dynamicTenagaKerja + dynamicListrik + dynamicMaintenance
-    val dynamicSisaLaba = totalPendapatan - dynamicTotalModal
+    val dynamicKertas = kotlin.math.round(qty * kertasHpp)
+    val dynamicTinta = kotlin.math.round(qty * tintaHpp)
+    val dynamicPengemasan = kotlin.math.round(order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp)
+    val dynamicWaste = kotlin.math.round(wastePct * totalPendapatan)
+    val dynamicTenagaKerja = kotlin.math.round(tenagaKerjaPct * totalPendapatan)
+    val dynamicListrik = kotlin.math.round(listrikPct * totalPendapatan)
+    val dynamicMaintenance = kotlin.math.round(maintenancePct * totalPendapatan)
+    val dynamicTotalModal = kotlin.math.round(dynamicKertas + dynamicTinta + dynamicPengemasan + dynamicWaste + dynamicTenagaKerja + dynamicListrik + dynamicMaintenance)
+    val dynamicSisaLaba = kotlin.math.round(totalPendapatan - dynamicTotalModal)
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -6139,15 +6129,15 @@ fun OrderHistoryCard(
     val qty = order.qtyOrder.toDouble()
     val totalPendapatan = qty * order.hargaSatuan
 
-    val dynamicKertas = qty * kertasHpp
-    val dynamicTinta = qty * tintaHpp
-    val dynamicPengemasan = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
-    val dynamicWaste = wastePct * totalPendapatan
-    val dynamicTenagaKerja = tenagaKerjaPct * totalPendapatan
-    val dynamicListrik = listrikPct * totalPendapatan
-    val dynamicMaintenance = maintenancePct * totalPendapatan
-    val dynamicTotalModal = dynamicKertas + dynamicTinta + dynamicPengemasan + dynamicWaste + dynamicTenagaKerja + dynamicListrik + dynamicMaintenance
-    val dynamicSisaLaba = totalPendapatan - dynamicTotalModal
+    val dynamicKertas = kotlin.math.round(qty * kertasHpp)
+    val dynamicTinta = kotlin.math.round(qty * tintaHpp)
+    val dynamicPengemasan = kotlin.math.round(order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp)
+    val dynamicWaste = kotlin.math.round(wastePct * totalPendapatan)
+    val dynamicTenagaKerja = kotlin.math.round(tenagaKerjaPct * totalPendapatan)
+    val dynamicListrik = kotlin.math.round(listrikPct * totalPendapatan)
+    val dynamicMaintenance = kotlin.math.round(maintenancePct * totalPendapatan)
+    val dynamicTotalModal = kotlin.math.round(dynamicKertas + dynamicTinta + dynamicPengemasan + dynamicWaste + dynamicTenagaKerja + dynamicListrik + dynamicMaintenance)
+    val dynamicSisaLaba = kotlin.math.round(totalPendapatan - dynamicTotalModal)
 
     val isLunas = order.status == "Lunas"
 
@@ -9169,7 +9159,7 @@ fun DetailLedgerDialog(
                         ) {
                             items(lunasOrders) { order ->
                                 val totalRevenue = order.qtyOrder.toDouble() * order.hargaSatuan
-                                val allocation = when (account.namaAkun) {
+                                val rawAllocation = when (account.namaAkun) {
                                     "Kertas", "Dompet Kertas" -> order.qtyOrder.toDouble() * kertasHpp
                                     "Tinta", "Dompet Tinta" -> order.qtyOrder.toDouble() * tintaHpp
                                     "Pengemasan", "Dompet Pengemasan" -> order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
@@ -9189,6 +9179,7 @@ fun DetailLedgerDialog(
                                     }
                                     else -> 0.0
                                 }
+                                val allocation = kotlin.math.round(rawAllocation)
 
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
