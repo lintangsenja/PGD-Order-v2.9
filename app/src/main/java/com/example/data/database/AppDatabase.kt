@@ -26,7 +26,7 @@ import com.example.data.model.RiwayatPemakaianBahan
         TransaksiBelanjaInventaris::class,
         RiwayatPemakaianBahan::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -114,6 +114,30 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_14_15 = object : androidx.room.migration.Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transaksi_order_masuk ADD COLUMN hpp_kertas_snapshot REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE transaksi_order_masuk ADD COLUMN hpp_tinta_snapshot REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE transaksi_order_masuk ADD COLUMN hpp_pengemasan_snapshot REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE transaksi_order_masuk ADD COLUMN waste_pct_snapshot REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE transaksi_order_masuk ADD COLUMN tenaga_kerja_pct_snapshot REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE transaksi_order_masuk ADD COLUMN listrik_pct_snapshot REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE transaksi_order_masuk ADD COLUMN maintenance_pct_snapshot REAL NOT NULL DEFAULT 0.0")
+                // Kunci tarif snapshot transaksi 'Lunas' historis agar laporan masa lalu immutable
+                db.execSQL("""
+                    UPDATE transaksi_order_masuk 
+                    SET hpp_kertas_snapshot = 106.0, 
+                        hpp_tinta_snapshot = 25.0, 
+                        hpp_pengemasan_snapshot = 300.0, 
+                        waste_pct_snapshot = 0.05, 
+                        tenaga_kerja_pct_snapshot = 0.07, 
+                        listrik_pct_snapshot = 0.02, 
+                        maintenance_pct_snapshot = 0.05 
+                    WHERE status = 'Lunas' AND hpp_kertas_snapshot = 0.0
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -121,7 +145,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "envelope_budgeting_db"
                 )
-                    .addMigrations(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                    .addMigrations(MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                     .fallbackToDestructiveMigration()
                     .addCallback(DatabaseCallback())
                     .build()
@@ -182,6 +206,13 @@ abstract class AppDatabase : RoomDatabase() {
                 
                 // Pastikan tabel riwayat pemakaian selalu ada
                 db.execSQL("CREATE TABLE IF NOT EXISTS riwayat_pemakaian_bahan (id_pemakaian INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, tanggal TEXT NOT NULL, id_barang INTEGER NOT NULL, nama_barang TEXT NOT NULL, jenis_koreksi TEXT NOT NULL, nilai_perubahan TEXT NOT NULL, keterangan TEXT NOT NULL DEFAULT '');")
+
+                // Pastikan order berstatus Lunas terdahulu mengunci tarif snapshot historis
+                try {
+                    db.execSQL("UPDATE transaksi_order_masuk SET hpp_kertas_snapshot = 106.0, hpp_tinta_snapshot = 25.0, hpp_pengemasan_snapshot = 300.0, waste_pct_snapshot = 0.05, tenaga_kerja_pct_snapshot = 0.07, listrik_pct_snapshot = 0.02, maintenance_pct_snapshot = 0.05 WHERE status = 'Lunas' AND (hpp_kertas_snapshot IS NULL OR hpp_kertas_snapshot = 0.0);")
+                } catch (e: Throwable) {
+                    // Ignore if columns do not exist yet before migration
+                }
             }
         }
     }

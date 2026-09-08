@@ -253,6 +253,13 @@ class FirestoreSyncManager(
                                         val totalPendapatan = qtyOrder.toDouble() * hargaSatuan
                                         val jumlahDibayar = doc.getDouble("jumlahDibayar") ?: if (status.equals("Lunas", ignoreCase = true)) totalPendapatan else 0.0
                                         val metodePembayaran = doc.getString("metodePembayaran") ?: if (status.equals("Lunas", ignoreCase = true)) "Bayar Penuh" else "Bayar Sebagian"
+                                        val hppKertasSnapshot = doc.getDouble("hppKertasSnapshot") ?: 0.0
+                                        val hppTintaSnapshot = doc.getDouble("hppTintaSnapshot") ?: 0.0
+                                        val hppPengemasanSnapshot = doc.getDouble("hppPengemasanSnapshot") ?: 0.0
+                                        val wastePctSnapshot = doc.getDouble("wastePctSnapshot") ?: 0.0
+                                        val tenagaKerjaPctSnapshot = doc.getDouble("tenagaKerjaPctSnapshot") ?: 0.0
+                                        val listrikPctSnapshot = doc.getDouble("listrikPctSnapshot") ?: 0.0
+                                        val maintenancePctSnapshot = doc.getDouble("maintenancePctSnapshot") ?: 0.0
                                         if (idOrder > 0 && namaPesanan.isNotBlank()) {
                                             val order = TransaksiOrderMasuk(
                                                 idOrder = idOrder,
@@ -265,7 +272,14 @@ class FirestoreSyncManager(
                                                 status = status,
                                                 kategori = kategori,
                                                 jumlahDibayar = jumlahDibayar,
-                                                metodePembayaran = metodePembayaran
+                                                metodePembayaran = metodePembayaran,
+                                                hppKertasSnapshot = hppKertasSnapshot,
+                                                hppTintaSnapshot = hppTintaSnapshot,
+                                                hppPengemasanSnapshot = hppPengemasanSnapshot,
+                                                wastePctSnapshot = wastePctSnapshot,
+                                                tenagaKerjaPctSnapshot = tenagaKerjaPctSnapshot,
+                                                listrikPctSnapshot = listrikPctSnapshot,
+                                                maintenancePctSnapshot = maintenancePctSnapshot
                                             )
                                             dao.insertOrder(order)
                                         }
@@ -674,6 +688,13 @@ class FirestoreSyncManager(
                 "jumlahDibayar" to order.effectiveJumlahDibayar,
                 "metodePembayaran" to order.metodePembayaran,
                 "sisaKekurangan" to order.sisaKekurangan,
+                "hppKertasSnapshot" to order.hppKertasSnapshot,
+                "hppTintaSnapshot" to order.hppTintaSnapshot,
+                "hppPengemasanSnapshot" to order.hppPengemasanSnapshot,
+                "wastePctSnapshot" to order.wastePctSnapshot,
+                "tenagaKerjaPctSnapshot" to order.tenagaKerjaPctSnapshot,
+                "listrikPctSnapshot" to order.listrikPctSnapshot,
+                "maintenancePctSnapshot" to order.maintenancePctSnapshot,
                 "updatedAt" to System.currentTimeMillis()
             )
 

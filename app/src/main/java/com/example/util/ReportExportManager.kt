@@ -100,23 +100,23 @@ object ReportExportManager {
         return accounts.map { account ->
             val name = account.namaAkun
             val rawMasukPlotting = when {
-                name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
-                name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
-                name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
-                name.contains("Waste", ignoreCase = true) -> ordersWithPayment.sumOf { wastePct * it.effectiveJumlahDibayar }
-                name.contains("Tenaga Kerja", ignoreCase = true) -> ordersWithPayment.sumOf { tenagaKerjaPct * it.effectiveJumlahDibayar }
-                name.contains("Listrik", ignoreCase = true) -> ordersWithPayment.sumOf { listrikPct * it.effectiveJumlahDibayar }
-                name.contains("Maintenance", ignoreCase = true) -> ordersWithPayment.sumOf { maintenancePct * it.effectiveJumlahDibayar }
+                name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * it.getEffectiveKertasHpp(kertasHpp) * it.paymentRatio }
+                name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * it.getEffectiveTintaHpp(tintaHpp) * it.paymentRatio }
+                name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * it.getEffectivePengemasanHpp(pengemasanHpp) * it.paymentRatio }
+                name.contains("Waste", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveWastePct(wastePct) * it.effectiveJumlahDibayar }
+                name.contains("Tenaga Kerja", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveTenagaKerjaPct(tenagaKerjaPct) * it.effectiveJumlahDibayar }
+                name.contains("Listrik", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveListrikPct(listrikPct) * it.effectiveJumlahDibayar }
+                name.contains("Maintenance", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveMaintenancePct(maintenancePct) * it.effectiveJumlahDibayar }
                 name.contains("Laba", ignoreCase = true) -> ordersWithPayment.sumOf { order ->
                     val paid = order.effectiveJumlahDibayar
                     val ratio = order.paymentRatio
-                    val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp * ratio
-                    val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp * ratio
-                    val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * ratio
-                    val alokasiWasteVal = wastePct * paid
-                    val alokasiTenagaKerjaVal = tenagaKerjaPct * paid
-                    val alokasiListrikVal = listrikPct * paid
-                    val alokasiMaintenanceVal = maintenancePct * paid
+                    val alokasiKertasVal = order.qtyOrder.toDouble() * order.getEffectiveKertasHpp(kertasHpp) * ratio
+                    val alokasiTintaVal = order.qtyOrder.toDouble() * order.getEffectiveTintaHpp(tintaHpp) * ratio
+                    val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * order.getEffectivePengemasanHpp(pengemasanHpp) * ratio
+                    val alokasiWasteVal = order.getEffectiveWastePct(wastePct) * paid
+                    val alokasiTenagaKerjaVal = order.getEffectiveTenagaKerjaPct(tenagaKerjaPct) * paid
+                    val alokasiListrikVal = order.getEffectiveListrikPct(listrikPct) * paid
+                    val alokasiMaintenanceVal = order.getEffectiveMaintenancePct(maintenancePct) * paid
                     val totalModalDasar = alokasiKertasVal + alokasiTintaVal + alokasiPengemasanVal + alokasiWasteVal + alokasiTenagaKerjaVal + alokasiListrikVal + alokasiMaintenanceVal
                     paid - totalModalDasar
                 }

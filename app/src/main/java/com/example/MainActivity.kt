@@ -2099,14 +2099,22 @@ fun OrderCardItem(
     var expanded by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // HPP and Percentages lookup from Master Akun / defaults
-    val kertasHpp = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
-    val tintaHpp = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
-    val pengemasanHpp = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
-    val wastePct = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Waste / Rusak" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
-    val tenagaKerjaPct = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
-    val listrikPct = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
-    val maintenancePct = accounts.find { it.namaAkun == "Maintenance Alat" || it.namaAkun == "Dompet Maintenance" }?.persentaseOperasional?.toDouble() ?: 0.05
+    // HPP and Percentages lookup from Master Akun / defaults (dengan snapshot immutable jika status Lunas)
+    val activeKertas = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
+    val activeTinta = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
+    val activePengemasan = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
+    val activeWaste = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Waste / Rusak" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
+    val activeTenagaKerja = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
+    val activeListrik = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
+    val activeMaintenance = accounts.find { it.namaAkun == "Maintenance Alat" || it.namaAkun == "Dompet Maintenance" }?.persentaseOperasional?.toDouble() ?: 0.05
+
+    val kertasHpp = order.getEffectiveKertasHpp(activeKertas)
+    val tintaHpp = order.getEffectiveTintaHpp(activeTinta)
+    val pengemasanHpp = order.getEffectivePengemasanHpp(activePengemasan)
+    val wastePct = order.getEffectiveWastePct(activeWaste)
+    val tenagaKerjaPct = order.getEffectiveTenagaKerjaPct(activeTenagaKerja)
+    val listrikPct = order.getEffectiveListrikPct(activeListrik)
+    val maintenancePct = order.getEffectiveMaintenancePct(activeMaintenance)
 
     val qty = order.qtyOrder.toDouble()
     val totalPendapatan = order.totalPendapatan.takeIf { it > 0.0 } ?: (qty * order.hargaSatuan)
@@ -6117,14 +6125,22 @@ fun OrderHistoryCard(
         )
     }
 
-    // Retrieve global settings with proper default fallbacks
-    val kertasHpp = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
-    val tintaHpp = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
-    val pengemasanHpp = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
-    val wastePct = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
-    val tenagaKerjaPct = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
-    val listrikPct = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
-    val maintenancePct = accounts.find { it.namaAkun == "Maintenance Alat" || it.namaAkun == "Dompet Maintenance" }?.persentaseOperasional?.toDouble() ?: 0.05
+    // Retrieve global settings with proper default fallbacks (menggunakan snapshot immutable untuk transaksi lunas)
+    val activeKertas = accounts.find { it.namaAkun == "Kertas" || it.namaAkun == "Dompet Kertas" }?.konstanHppUnit?.toDouble() ?: 106.0
+    val activeTinta = accounts.find { it.namaAkun == "Tinta" || it.namaAkun == "Dompet Tinta" }?.konstanHppUnit?.toDouble() ?: 25.0
+    val activePengemasan = accounts.find { it.namaAkun == "Pengemasan" || it.namaAkun == "Dompet Pengemasan" }?.konstanHppUnit?.toDouble() ?: 300.0
+    val activeWaste = accounts.find { it.namaAkun == "Waste" || it.namaAkun == "Dompet Waste / Rusak" }?.persentaseOperasional?.toDouble() ?: 0.05
+    val activeTenagaKerja = accounts.find { it.namaAkun == "Tenaga Kerja" || it.namaAkun == "Dompet Tenaga Kerja" }?.persentaseOperasional?.toDouble() ?: 0.07
+    val activeListrik = accounts.find { it.namaAkun == "Listrik" || it.namaAkun == "Dompet Listrik" }?.persentaseOperasional?.toDouble() ?: 0.02
+    val activeMaintenance = accounts.find { it.namaAkun == "Maintenance Alat" || it.namaAkun == "Dompet Maintenance" }?.persentaseOperasional?.toDouble() ?: 0.05
+
+    val kertasHpp = order.getEffectiveKertasHpp(activeKertas)
+    val tintaHpp = order.getEffectiveTintaHpp(activeTinta)
+    val pengemasanHpp = order.getEffectivePengemasanHpp(activePengemasan)
+    val wastePct = order.getEffectiveWastePct(activeWaste)
+    val tenagaKerjaPct = order.getEffectiveTenagaKerjaPct(activeTenagaKerja)
+    val listrikPct = order.getEffectiveListrikPct(activeListrik)
+    val maintenancePct = order.getEffectiveMaintenancePct(activeMaintenance)
 
     val qty = order.qtyOrder.toDouble()
     val totalPendapatan = qty * order.hargaSatuan
@@ -9158,23 +9174,31 @@ fun DetailLedgerDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(lunasOrders) { order ->
+                                val effKertas = order.getEffectiveKertasHpp(kertasHpp)
+                                val effTinta = order.getEffectiveTintaHpp(tintaHpp)
+                                val effPengemasan = order.getEffectivePengemasanHpp(pengemasanHpp)
+                                val effWaste = order.getEffectiveWastePct(wastePct)
+                                val effTenaga = order.getEffectiveTenagaKerjaPct(tenagaKerjaPct)
+                                val effListrik = order.getEffectiveListrikPct(listrikPct)
+                                val effMaint = order.getEffectiveMaintenancePct(maintenancePct)
+
                                 val totalRevenue = order.qtyOrder.toDouble() * order.hargaSatuan
                                 val rawAllocation = when (account.namaAkun) {
-                                    "Kertas", "Dompet Kertas" -> order.qtyOrder.toDouble() * kertasHpp
-                                    "Tinta", "Dompet Tinta" -> order.qtyOrder.toDouble() * tintaHpp
-                                    "Pengemasan", "Dompet Pengemasan" -> order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
-                                    "Waste", "Dompet Waste / Rusak" -> wastePct * totalRevenue
-                                    "Tenaga Kerja", "Dompet Tenaga Kerja" -> tenagaKerjaPct * totalRevenue
-                                    "Listrik", "Dompet Listrik" -> listrikPct * totalRevenue
-                                    "Maintenance Alat", "Dompet Maintenance" -> maintenancePct * totalRevenue
+                                    "Kertas", "Dompet Kertas" -> order.qtyOrder.toDouble() * effKertas
+                                    "Tinta", "Dompet Tinta" -> order.qtyOrder.toDouble() * effTinta
+                                    "Pengemasan", "Dompet Pengemasan" -> order.jumlahPlastikPengemasan.toDouble() * effPengemasan
+                                    "Waste", "Dompet Waste / Rusak" -> effWaste * totalRevenue
+                                    "Tenaga Kerja", "Dompet Tenaga Kerja" -> effTenaga * totalRevenue
+                                    "Listrik", "Dompet Listrik" -> effListrik * totalRevenue
+                                    "Maintenance Alat", "Dompet Maintenance" -> effMaint * totalRevenue
                                     "Sisa Laba", "Dompet Laba Bersih" -> {
-                                        val kVal = order.qtyOrder.toDouble() * kertasHpp
-                                        val tVal = order.qtyOrder.toDouble() * tintaHpp
-                                        val pVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp
-                                        val wVal = wastePct * totalRevenue
-                                        val tkVal = tenagaKerjaPct * totalRevenue
-                                        val lVal = listrikPct * totalRevenue
-                                        val mVal = maintenancePct * totalRevenue
+                                        val kVal = order.qtyOrder.toDouble() * effKertas
+                                        val tVal = order.qtyOrder.toDouble() * effTinta
+                                        val pVal = order.jumlahPlastikPengemasan.toDouble() * effPengemasan
+                                        val wVal = effWaste * totalRevenue
+                                        val tkVal = effTenaga * totalRevenue
+                                        val lVal = effListrik * totalRevenue
+                                        val mVal = effMaint * totalRevenue
                                         totalRevenue - (kVal + tVal + pVal + wVal + tkVal + lVal + mVal)
                                     }
                                     else -> 0.0
@@ -9592,11 +9616,9 @@ fun BackupRestoreTab(viewModel: FinanceViewModel) {
 // ==========================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary) {
+fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary? = null) {
     val colorScheme = MaterialTheme.colorScheme
     val accounts by viewModel.allAccounts.collectAsStateWithLifecycle(emptyList())
-
-    var selectedLedgerAccount by remember { mutableStateOf<AccountDashboardRow?>(null) }
 
     // Define states for our inputs
     var kertasHppText by remember { mutableStateOf("") }
@@ -9642,60 +9664,91 @@ fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary)
     )
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Section Header
         item {
-            Text(
-                text = "Pengaturan Finansial",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = colorScheme.onBackground
-            )
-            Text(
-                text = "Sesuaikan nilai default HPP dan persentase operasional untuk amplop secara global. Perubahan akan langsung memengaruhi kalkulasi pembagian amplop di Dashboard secara real-time.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-            )
-        }
-
-        // Section: LEDGER SALDO POS (Real-time)
-        item {
-            LedgerSaldoPosCard(
-                summary = summary,
-                onAccountClick = { selectedLedgerAccount = it }
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(colorScheme.primaryContainer, RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = null,
+                            tint = colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Text(
+                        text = "Pengaturan Finansial",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.onBackground
+                    )
+                }
+                Text(
+                    text = "Sesuaikan nilai default HPP dan persentase operasional untuk alokasi amplop pos kas secara global. Nilai ini menjadi acuan kalkulasi autoplotting transaksi baru secara real-time.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         // Section 1: HPP Konstan (Unit Based)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                border = BorderStroke(1.dp, colorScheme.outlineVariant)
+                border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.AttachMoney, contentDescription = null, tint = colorScheme.primary)
-                        Text(
-                            text = "HPP Konstan per Unit (Rupiah)",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = colorScheme.primary
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.AttachMoney,
+                                contentDescription = null,
+                                tint = Color(0xFF2E7D32),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "HPP Konstan per Unit (Rupiah)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colorScheme.primary
+                            )
+                            Text(
+                                text = "Biaya tetap per lembar atau per pcs kemasan",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
-                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.6f))
 
                     OutlinedTextField(
                         value = kertasHppText,
@@ -9740,28 +9793,48 @@ fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-                border = BorderStroke(1.dp, colorScheme.outlineVariant)
+                border = BorderStroke(1.dp, colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.Tune, contentDescription = null, tint = colorScheme.primary)
-                        Text(
-                            text = "Persentase Alokasi Operasional (%)",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = colorScheme.primary
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(Color(0xFFEDE7F6), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = Color(0xFF6A4C93),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Persentase Alokasi Operasional (%)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colorScheme.primary
+                            )
+                            Text(
+                                text = "Alokasi biaya berbasis persentase dari total pendapatan",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
-                    HorizontalDivider(color = colorScheme.outlineVariant)
+                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.6f))
 
                     OutlinedTextField(
                         value = wastePctText,
@@ -9820,6 +9893,7 @@ fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary)
 
         // Section 3: Save Button
         item {
+            Spacer(modifier = Modifier.height(4.dp))
             Button(
                 onClick = {
                     val kertasHpp = parseDoubleSafe(kertasHppText, 106.0)
@@ -9843,7 +9917,7 @@ fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(54.dp)
                     .testTag("save_settings_button"),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF6A4C93)
@@ -9864,37 +9938,28 @@ fun FinancialSettingsTab(viewModel: FinanceViewModel, summary: DashboardSummary)
         
         // Extra padding at the bottom for navigation bar clearance
         item {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
-    }
-
-    if (selectedLedgerAccount != null) {
-        DetailLedgerDialog(
-            account = selectedLedgerAccount!!,
-            viewModel = viewModel,
-            showQuickActions = false,
-            onDismiss = { selectedLedgerAccount = null }
-        )
     }
 }
 
 private fun formatDouble(value: Double): String {
-    return formatAngka(value)
+    return if (value % 1.0 == 0.0) formatAngka(value) else String.format(Locale.US, "%.2f", value)
 }
 
 private fun formatFloatValue(value: Float?): String {
     if (value == null) return ""
-    return formatAngka(value.toDouble())
+    return if (value % 1f == 0f) String.format(Locale.US, "%.0f", value) else String.format(Locale.US, "%.2f", value)
 }
 
 private fun formatPercentValue(value: Float?): String {
     if (value == null) return ""
     val pct = value * 100f
-    return formatAngka(pct.toDouble())
+    return if (pct % 1f == 0f) String.format(Locale.US, "%.0f", pct) else String.format(Locale.US, "%.2f", pct)
 }
 
 private fun parseDoubleSafe(input: String, default: Double): Double {
-    return parseDoubleInput(input) ?: default
+    return parseDecimalDouble(input) ?: parseDoubleInput(input) ?: default
 }
 
 // ==========================================
@@ -10015,7 +10080,7 @@ fun LaporanTab(viewModel: FinanceViewModel) {
             val tabs = listOf(
                 Triple("Laporan", Icons.Default.Assessment, 0),
                 Triple("Analisis Pos", Icons.Default.BarChart, 1),
-                Triple("Ledger", Icons.Default.AccountBalanceWallet, 2)
+                Triple("Ledger Pos", Icons.Default.AccountBalanceWallet, 2)
             )
             tabs.forEach { (title, icon, index) ->
                 val isSelected = selectedSubTab == index
@@ -10649,22 +10714,41 @@ fun LaporanTab(viewModel: FinanceViewModel) {
             2 -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     item {
-                        Text(
-                            text = "Ledger Saldo Pos",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Pantau pembagian otomatis (plotting) ke amplop modal dasar dan sisa laba berdasarkan transaksi lunas, serta mutasi kas penyesuaian secara real-time.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .background(colorScheme.primaryContainer, RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.AccountBalanceWallet,
+                                        contentDescription = null,
+                                        tint = colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Ledger Saldo Pos",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorScheme.onBackground
+                                )
+                            }
+                            Text(
+                                text = "Pantau pembagian otomatis (plotting) ke amplop modal dasar dan sisa laba berdasarkan transaksi lunas, serta mutasi kas penyesuaian secara real-time.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
                     item {
@@ -10672,6 +10756,37 @@ fun LaporanTab(viewModel: FinanceViewModel) {
                             summary = summary,
                             onAccountClick = { selectedLedgerAccount = it }
                         )
+                    }
+
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                            border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Ketuk salah satu baris akun pos di atas untuk melihat rincian riwayat transaksi plotting dan mutasi kas penyesuaian.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }

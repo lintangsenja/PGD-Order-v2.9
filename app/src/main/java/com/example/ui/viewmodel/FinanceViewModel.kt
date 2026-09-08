@@ -17,6 +17,7 @@ import com.example.data.model.CustomerFrequency
 import com.example.data.model.InventarisBahanBaku
 import com.example.data.model.TransaksiBelanjaInventaris
 import com.example.data.model.RiwayatPemakaianBahan
+import com.example.data.model.NotaSettings
 import com.example.data.repository.FinanceRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
@@ -121,6 +122,39 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val prefs = application.getSharedPreferences("vintrack_profile_prefs", Context.MODE_PRIVATE)
     private val _userProfile = MutableStateFlow(loadUserProfileFromPrefs())
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
+
+    // Pengaturan Khusus Modul Order Nota (Terisolasi dari HVS umum)
+    private val notaPrefs = application.getSharedPreferences("nota_settings_prefs", Context.MODE_PRIVATE)
+    private val _notaSettings = MutableStateFlow(loadNotaSettingsFromPrefs())
+    val notaSettings: StateFlow<NotaSettings> = _notaSettings.asStateFlow()
+
+    private fun loadNotaSettingsFromPrefs(): NotaSettings {
+        return NotaSettings(
+            wastePct = notaPrefs.getFloat("nota_waste_pct", 0.05f).toDouble(),
+            tintaPct = notaPrefs.getFloat("nota_tinta_pct", 0.05f).toDouble(),
+            tenagaKerjaPct = notaPrefs.getFloat("nota_tenaga_pct", 0.07f).toDouble(),
+            listrikPct = notaPrefs.getFloat("nota_listrik_pct", 0.02f).toDouble(),
+            maintenancePct = notaPrefs.getFloat("nota_maint_pct", 0.05f).toDouble(),
+            masterHargaPengemasan = notaPrefs.getFloat("nota_kemasan_harga", 300.0f).toDouble()
+        )
+    }
+
+    fun saveNotaSettings(settings: NotaSettings) {
+        notaPrefs.edit()
+            .putFloat("nota_waste_pct", settings.wastePct.toFloat())
+            .putFloat("nota_tinta_pct", settings.tintaPct.toFloat())
+            .putFloat("nota_tenaga_pct", settings.tenagaKerjaPct.toFloat())
+            .putFloat("nota_listrik_pct", settings.listrikPct.toFloat())
+            .putFloat("nota_maint_pct", settings.maintenancePct.toFloat())
+            .putFloat("nota_kemasan_harga", settings.masterHargaPengemasan.toFloat())
+            .apply()
+        _notaSettings.value = settings
+    }
+
+    fun resetNotaSettingsToDefault() {
+        val defaultSettings = NotaSettings()
+        saveNotaSettings(defaultSettings)
+    }
 
     // Firebase Auth & Anonymous Guest Auth State
     private val auth: FirebaseAuth? = try { FirebaseAuth.getInstance() } catch (e: Throwable) { null }
@@ -397,24 +431,26 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 val name = account.namaAkun
 
                 // 1. Calculate Saldo Terplotting based on autoplotting triggers with dynamic configuration
+                // Untuk transaksi LUNAS: HPP/modal terkunci menggunakan snapshot immutable.
+                // Untuk transaksi PENDING: mengikuti tarif HPP aktif terbaru.
                 val rawSaldoTerplotting = when {
-                    name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
-                    name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
-                    name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
-                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> ordersWithPayment.sumOf { wastePct * it.effectiveJumlahDibayar }
-                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> ordersWithPayment.sumOf { tenagaKerjaPct * it.effectiveJumlahDibayar }
-                    name.contains("Listrik", ignoreCase = true) -> ordersWithPayment.sumOf { listrikPct * it.effectiveJumlahDibayar }
-                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> ordersWithPayment.sumOf { maintenancePct * it.effectiveJumlahDibayar }
+                    name.contains("Kertas", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * it.getEffectiveKertasHpp(kertasHpp) * it.paymentRatio }
+                    name.contains("Tinta", ignoreCase = true) -> ordersWithPayment.sumOf { it.qtyOrder.toDouble() * it.getEffectiveTintaHpp(tintaHpp) * it.paymentRatio }
+                    name.contains("Pengemasan", ignoreCase = true) -> ordersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * it.getEffectivePengemasanHpp(pengemasanHpp) * it.paymentRatio }
+                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveWastePct(wastePct) * it.effectiveJumlahDibayar }
+                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveTenagaKerjaPct(tenagaKerjaPct) * it.effectiveJumlahDibayar }
+                    name.contains("Listrik", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveListrikPct(listrikPct) * it.effectiveJumlahDibayar }
+                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> ordersWithPayment.sumOf { it.getEffectiveMaintenancePct(maintenancePct) * it.effectiveJumlahDibayar }
                     name.contains("Laba", ignoreCase = true) -> ordersWithPayment.sumOf { order ->
                         val paid = order.effectiveJumlahDibayar
                         val ratio = order.paymentRatio
-                        val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp * ratio
-                        val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp * ratio
-                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * ratio
-                        val alokasiWasteVal = wastePct * paid
-                        val alokasiTenagaKerjaVal = tenagaKerjaPct * paid
-                        val alokasiListrikVal = listrikPct * paid
-                        val alokasiMaintenanceVal = maintenancePct * paid
+                        val alokasiKertasVal = order.qtyOrder.toDouble() * order.getEffectiveKertasHpp(kertasHpp) * ratio
+                        val alokasiTintaVal = order.qtyOrder.toDouble() * order.getEffectiveTintaHpp(tintaHpp) * ratio
+                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * order.getEffectivePengemasanHpp(pengemasanHpp) * ratio
+                        val alokasiWasteVal = order.getEffectiveWastePct(wastePct) * paid
+                        val alokasiTenagaKerjaVal = order.getEffectiveTenagaKerjaPct(tenagaKerjaPct) * paid
+                        val alokasiListrikVal = order.getEffectiveListrikPct(listrikPct) * paid
+                        val alokasiMaintenanceVal = order.getEffectiveMaintenancePct(maintenancePct) * paid
                         val totalModalDasar = alokasiKertasVal + alokasiTintaVal + alokasiPengemasanVal + alokasiWasteVal + alokasiTenagaKerjaVal + alokasiListrikVal + alokasiMaintenanceVal
                         paid - totalModalDasar
                     }
@@ -517,23 +553,23 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
                 // Plotting within period (or all time if "Semua Waktu") proporsional berdasarkan uang riil yang dibayarkan
                 val rawMasukPlotting = when {
-                    name.contains("Kertas", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * kertasHpp * it.paymentRatio }
-                    name.contains("Tinta", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * tintaHpp * it.paymentRatio }
-                    name.contains("Pengemasan", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * it.paymentRatio }
-                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { wastePct * it.effectiveJumlahDibayar }
-                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { tenagaKerjaPct * it.effectiveJumlahDibayar }
-                    name.contains("Listrik", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { listrikPct * it.effectiveJumlahDibayar }
-                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { maintenancePct * it.effectiveJumlahDibayar }
+                    name.contains("Kertas", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * it.getEffectiveKertasHpp(kertasHpp) * it.paymentRatio }
+                    name.contains("Tinta", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.qtyOrder.toDouble() * it.getEffectiveTintaHpp(tintaHpp) * it.paymentRatio }
+                    name.contains("Pengemasan", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.jumlahPlastikPengemasan.toDouble() * it.getEffectivePengemasanHpp(pengemasanHpp) * it.paymentRatio }
+                    name.contains("Waste", ignoreCase = true) || name.contains("Rusak", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.getEffectiveWastePct(wastePct) * it.effectiveJumlahDibayar }
+                    name.contains("Tenaga", ignoreCase = true) || name.contains("Gaji", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.getEffectiveTenagaKerjaPct(tenagaKerjaPct) * it.effectiveJumlahDibayar }
+                    name.contains("Listrik", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.getEffectiveListrikPct(listrikPct) * it.effectiveJumlahDibayar }
+                    name.contains("Maintenance", ignoreCase = true) || name.contains("Alat", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { it.getEffectiveMaintenancePct(maintenancePct) * it.effectiveJumlahDibayar }
                     name.contains("Laba", ignoreCase = true) -> filteredOrdersWithPayment.sumOf { order ->
                         val paid = order.effectiveJumlahDibayar
                         val ratio = order.paymentRatio
-                        val alokasiKertasVal = order.qtyOrder.toDouble() * kertasHpp * ratio
-                        val alokasiTintaVal = order.qtyOrder.toDouble() * tintaHpp * ratio
-                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * pengemasanHpp * ratio
-                        val alokasiWasteVal = wastePct * paid
-                        val alokasiTenagaKerjaVal = tenagaKerjaPct * paid
-                        val alokasiListrikVal = listrikPct * paid
-                        val alokasiMaintenanceVal = maintenancePct * paid
+                        val alokasiKertasVal = order.qtyOrder.toDouble() * order.getEffectiveKertasHpp(kertasHpp) * ratio
+                        val alokasiTintaVal = order.qtyOrder.toDouble() * order.getEffectiveTintaHpp(tintaHpp) * ratio
+                        val alokasiPengemasanVal = order.jumlahPlastikPengemasan.toDouble() * order.getEffectivePengemasanHpp(pengemasanHpp) * ratio
+                        val alokasiWasteVal = order.getEffectiveWastePct(wastePct) * paid
+                        val alokasiTenagaKerjaVal = order.getEffectiveTenagaKerjaPct(tenagaKerjaPct) * paid
+                        val alokasiListrikVal = order.getEffectiveListrikPct(listrikPct) * paid
+                        val alokasiMaintenanceVal = order.getEffectiveMaintenancePct(maintenancePct) * paid
                         val totalModalDasar = alokasiKertasVal + alokasiTintaVal + alokasiPengemasanVal + alokasiWasteVal + alokasiTenagaKerjaVal + alokasiListrikVal + alokasiMaintenanceVal
                         paid - totalModalDasar
                     }
@@ -632,6 +668,17 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 else -> jumlahDibayar.coerceIn(0.0, total)
             }
             val finalStatus = if (actualPaid >= total && total > 0.0) "Lunas" else if (status.equals("Lunas", ignoreCase = true) && actualPaid >= total) "Lunas" else "Belum Lunas"
+            
+            // Ambil tarif aktif dari master akun/pengaturan finansial saat transaksi disimpan
+            val accounts = allAccounts.value
+            val activeKertas = accounts.find { it.namaAkun.contains("Kertas", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 106.0
+            val activeTinta = accounts.find { it.namaAkun.contains("Tinta", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 25.0
+            val activePengemasan = accounts.find { it.namaAkun.contains("Pengemasan", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 300.0
+            val activeWaste = accounts.find { it.namaAkun.contains("Waste", ignoreCase = true) || it.namaAkun.contains("Rusak", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+            val activeTenaga = accounts.find { it.namaAkun.contains("Tenaga", ignoreCase = true) || it.namaAkun.contains("Gaji", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.07
+            val activeListrik = accounts.find { it.namaAkun.contains("Listrik", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.02
+            val activeMaint = accounts.find { it.namaAkun.contains("Maintenance", ignoreCase = true) || it.namaAkun.contains("Alat", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+
             val order = TransaksiOrderMasuk(
                 tanggalOrder = tanggal,
                 namaPesanan = nama,
@@ -642,7 +689,14 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 status = finalStatus,
                 kategori = kategori,
                 jumlahDibayar = actualPaid,
-                metodePembayaran = metodePembayaran
+                metodePembayaran = metodePembayaran,
+                hppKertasSnapshot = activeKertas,
+                hppTintaSnapshot = activeTinta,
+                hppPengemasanSnapshot = activePengemasan,
+                wastePctSnapshot = activeWaste,
+                tenagaKerjaPctSnapshot = activeTenaga,
+                listrikPctSnapshot = activeListrik,
+                maintenancePctSnapshot = activeMaint
             )
             repository.insertOrder(order)
         }
@@ -655,10 +709,29 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             val currentPaid = order.effectiveJumlahDibayar
             val newPaid = (currentPaid + additionalPayment).coerceIn(0.0, total)
             val finalStatus = if (newPaid >= total) "Lunas" else "Belum Lunas"
+
+            val accounts = allAccounts.value
+            val activeKertas = accounts.find { it.namaAkun.contains("Kertas", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 106.0
+            val activeTinta = accounts.find { it.namaAkun.contains("Tinta", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 25.0
+            val activePengemasan = accounts.find { it.namaAkun.contains("Pengemasan", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 300.0
+            val activeWaste = accounts.find { it.namaAkun.contains("Waste", ignoreCase = true) || it.namaAkun.contains("Rusak", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+            val activeTenaga = accounts.find { it.namaAkun.contains("Tenaga", ignoreCase = true) || it.namaAkun.contains("Gaji", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.07
+            val activeListrik = accounts.find { it.namaAkun.contains("Listrik", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.02
+            val activeMaint = accounts.find { it.namaAkun.contains("Maintenance", ignoreCase = true) || it.namaAkun.contains("Alat", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+
+            val isAlreadyLunasWithSnapshot = order.status.equals("Lunas", ignoreCase = true) && order.hppKertasSnapshot > 0.0
+
             val updatedOrder = order.copy(
                 jumlahDibayar = newPaid,
                 status = finalStatus,
-                metodePembayaran = if (finalStatus == "Lunas") "Bayar Penuh" else "Bayar Sebagian"
+                metodePembayaran = if (finalStatus == "Lunas") "Bayar Penuh" else "Bayar Sebagian",
+                hppKertasSnapshot = if (isAlreadyLunasWithSnapshot) order.hppKertasSnapshot else activeKertas,
+                hppTintaSnapshot = if (isAlreadyLunasWithSnapshot) order.hppTintaSnapshot else activeTinta,
+                hppPengemasanSnapshot = if (isAlreadyLunasWithSnapshot) order.hppPengemasanSnapshot else activePengemasan,
+                wastePctSnapshot = if (isAlreadyLunasWithSnapshot) order.wastePctSnapshot else activeWaste,
+                tenagaKerjaPctSnapshot = if (isAlreadyLunasWithSnapshot) order.tenagaKerjaPctSnapshot else activeTenaga,
+                listrikPctSnapshot = if (isAlreadyLunasWithSnapshot) order.listrikPctSnapshot else activeListrik,
+                maintenancePctSnapshot = if (isAlreadyLunasWithSnapshot) order.maintenancePctSnapshot else activeMaint
             )
             repository.updateOrder(updatedOrder)
         }
@@ -671,10 +744,100 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Update order
+    // Update order dengan aturan bisnis:
+    // 1. Jika transaksi sebelumnya sudah LUNAS (dan ada snapshot valid), kunci HPP tidak boleh berubah (immutable).
+    // 2. Jika transaksi sebelumnya PENDING (Belum Lunas), saat diedit/disimpan ulang wajib mengikuti tarif HPP aktif terbaru.
     fun updateOrder(order: TransaksiOrderMasuk) {
         viewModelScope.launch {
-            repository.updateOrder(order)
+            val accounts = allAccounts.value
+            val activeKertas = accounts.find { it.namaAkun.contains("Kertas", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 106.0
+            val activeTinta = accounts.find { it.namaAkun.contains("Tinta", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 25.0
+            val activePengemasan = accounts.find { it.namaAkun.contains("Pengemasan", ignoreCase = true) }?.konstanHppUnit?.toDouble() ?: 300.0
+            val activeWaste = accounts.find { it.namaAkun.contains("Waste", ignoreCase = true) || it.namaAkun.contains("Rusak", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+            val activeTenaga = accounts.find { it.namaAkun.contains("Tenaga", ignoreCase = true) || it.namaAkun.contains("Gaji", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.07
+            val activeListrik = accounts.find { it.namaAkun.contains("Listrik", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.02
+            val activeMaint = accounts.find { it.namaAkun.contains("Maintenance", ignoreCase = true) || it.namaAkun.contains("Alat", ignoreCase = true) }?.persentaseOperasional?.toDouble() ?: 0.05
+
+            val existing = repository.getAllOrdersDirect().find { it.idOrder == order.idOrder }
+            val wasLunasWithSnapshot = existing?.status?.equals("Lunas", ignoreCase = true) == true && existing.hppKertasSnapshot > 0.0
+
+            val finalizedOrder = if (order.isNota) {
+                // Modul Order Nota beroperasi sebagai ekosistem mandiri dengan snapshot HPP & pembulatan manual spesifik
+                order
+            } else if (wasLunasWithSnapshot) {
+                // Pertahankan tarif historis snapshot transaksi yang sudah lunas (immutable)
+                order.copy(
+                    hppKertasSnapshot = existing.hppKertasSnapshot,
+                    hppTintaSnapshot = existing.hppTintaSnapshot,
+                    hppPengemasanSnapshot = existing.hppPengemasanSnapshot,
+                    wastePctSnapshot = existing.wastePctSnapshot,
+                    tenagaKerjaPctSnapshot = existing.tenagaKerjaPctSnapshot,
+                    listrikPctSnapshot = existing.listrikPctSnapshot,
+                    maintenancePctSnapshot = existing.maintenancePctSnapshot
+                )
+            } else {
+                // Transaksi status Pending diedit/disimpan: perbarui ke tarif HPP aktif terbaru
+                order.copy(
+                    hppKertasSnapshot = activeKertas,
+                    hppTintaSnapshot = activeTinta,
+                    hppPengemasanSnapshot = activePengemasan,
+                    wastePctSnapshot = activeWaste,
+                    tenagaKerjaPctSnapshot = activeTenaga,
+                    listrikPctSnapshot = activeListrik,
+                    maintenancePctSnapshot = activeMaint
+                )
+            }
+            repository.updateOrder(finalizedOrder)
+        }
+    }
+
+    // Insert order khusus modul Order Nota dengan snapshot modal dan pembulatan manual spesifik
+    fun insertNotaOrder(
+        tanggal: String,
+        nama: String,
+        qty: Int,
+        satuan: String,
+        harga: Double,
+        plastik: Int,
+        status: String,
+        jumlahDibayar: Double = 0.0,
+        metodePembayaran: String = "Bayar Penuh",
+        hppKertasSnapshot: Double,
+        hppTintaSnapshot: Double,
+        hppPengemasanSnapshot: Double,
+        wastePctSnapshot: Double,
+        tenagaKerjaPctSnapshot: Double,
+        listrikPctSnapshot: Double,
+        maintenancePctSnapshot: Double
+    ) {
+        viewModelScope.launch {
+            val total = qty.toDouble() * harga
+            val actualPaid = when (metodePembayaran) {
+                "Bayar Penuh" -> total
+                else -> jumlahDibayar.coerceIn(0.0, total)
+            }
+            val finalStatus = if (actualPaid >= total && total > 0.0) "Lunas" else if (status.equals("Lunas", ignoreCase = true) && actualPaid >= total) "Lunas" else "Belum Lunas"
+
+            val order = TransaksiOrderMasuk(
+                tanggalOrder = tanggal,
+                namaPesanan = nama,
+                qtyOrder = qty,
+                satuan = satuan,
+                hargaSatuan = harga,
+                jumlahPlastikPengemasan = plastik,
+                status = finalStatus,
+                kategori = "Nota",
+                jumlahDibayar = actualPaid,
+                metodePembayaran = metodePembayaran,
+                hppKertasSnapshot = hppKertasSnapshot,
+                hppTintaSnapshot = hppTintaSnapshot,
+                hppPengemasanSnapshot = hppPengemasanSnapshot,
+                wastePctSnapshot = wastePctSnapshot,
+                tenagaKerjaPctSnapshot = tenagaKerjaPctSnapshot,
+                listrikPctSnapshot = listrikPctSnapshot,
+                maintenancePctSnapshot = maintenancePctSnapshot
+            )
+            repository.insertOrder(order)
         }
     }
 

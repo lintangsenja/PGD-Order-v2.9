@@ -32,6 +32,10 @@ class FinanceRepository(
         return financeDao.getAllAccountsDirect()
     }
 
+    suspend fun getAllOrdersDirect(): List<TransaksiOrderMasuk> {
+        return financeDao.getAllOrdersDirect()
+    }
+
     val allOrders: Flow<List<TransaksiOrderMasuk>> = financeDao.getAllOrdersFlow()
     val allMutations: Flow<List<MutasiManualKeluarMasuk>> = financeDao.getAllMutationsFlow()
     val allPelanggan: Flow<List<MasterPelanggan>> = financeDao.getAllPelangganFlow()
